@@ -435,11 +435,11 @@ function transferSummary(playerId, round = scoreTargetRound()) {
   const transfers = scoreTransfers(round);
   const paid = transfers
     .filter((transfer) => transfer.fromPlayerId === playerId)
-    .map((transfer) => `付给${playerName(transfer.toPlayerId)} ${transfer.points}分`);
+    .map((transfer) => `${playerName(transfer.toPlayerId)} −${transfer.points}`);
   const received = transfers
     .filter((transfer) => transfer.toPlayerId === playerId)
-    .map((transfer) => `收到${playerName(transfer.fromPlayerId)} ${transfer.points}分`);
-  return [...paid, ...received].join(" · ") || "暂无收付记录";
+    .map((transfer) => `${playerName(transfer.fromPlayerId)} +${transfer.points}`);
+  return [...paid, ...received].join(" · ") || "—";
 }
 
 function updateSum() {
