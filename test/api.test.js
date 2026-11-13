@@ -307,6 +307,43 @@ test("one profile can only sit in one active room", async () => {
   });
 });
 
+test("room closes after six hours without data updates", async () => {
+  let clock = Date.now();
+  await withServer(async (base) => {
+    const created = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const code = created.data.code;
+    const seated = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      token: created.data.hostToken,
+      body: { name: "阿明", avatar: "bunny", profileId: "inactive-room-player" },
+    });
+    assert.equal(seated.status, 201);
+
+    clock += 5 * 60 * 60 * 1000;
+    const activity = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "小李", avatar: "cat", profileId: "active-room-player" },
+    });
+    assert.equal(activity.status, 201);
+
+    clock += 2 * 60 * 60 * 1000;
+    const stillActive = await send(base, `/api/rooms/${code}`);
+    assert.equal(stillActive.data.room.status, "active");
+
+    clock += 4 * 60 * 60 * 1000 + 1;
+    const expired = await send(base, `/api/rooms/${code}`);
+    assert.equal(expired.status, 200);
+    assert.equal(expired.data.room.status, "ended");
+    assert.ok(expired.data.room.endedAt);
+
+    const rejected = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "阿红", avatar: "fox", profileId: "late-player" },
+    });
+    assert.equal(rejected.status, 409);
+  }, { now: () => clock });
+});
+
 test("a full table stops at eight and names are stored as text", async () => {
   await withServer(async (base) => {
     const created = await send(base, "/api/rooms", { method: "POST", body: {} });
