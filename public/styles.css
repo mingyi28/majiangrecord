@@ -646,6 +646,17 @@ input:focus { border-color: var(--cyan); }
 }
 
 .dock .btn { flex: 1; }
+.dock-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+.dock-secondary {
+  display: flex;
+  gap: 8px;
+}
+.dock-secondary .btn { flex: 1; }
 .dock .sum { flex: 1.2; margin: 0; text-align: center; font-weight: 800; }
 .dock .sum.ok { color: var(--cyan-deep); }
 .dock .ended { flex: 1; text-align: center; margin: 0; }

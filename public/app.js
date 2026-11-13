@@ -540,19 +540,14 @@ function renderDock() {
   if (state.room.status === "dissolved") return `<p class="ended">这桌已经解散，记录留在管理端</p>`;
   if (state.room.status === "ended") return `<p class="ended">房间已关闭，今天的战斗结束了</p>`;
   const selfId = currentPlayerId();
-  const seated = Boolean(selfId);
-  const parts = [];
-  if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
-  if (selfId) {
-    parts.push(`<button type="button" class="btn ghost" data-action="ask-leave">退出房间</button>`);
-  }
-  if (canManage()) {
-    parts.push(`<button type="button" class="btn ghost" data-action="ask-end">关闭房间</button>`);
-  }
-  if (selfId) {
-    parts.push(`<button type="button" class="btn primary" data-action="open-record">记一局</button>`);
-  }
-  return parts.join("");
+  if (!selfId) return `<button type="button" class="btn mint" data-action="open-sit">坐下</button>`;
+  return `<div class="dock-stack">
+    <button type="button" class="btn primary" data-action="open-record">记一局</button>
+    <div class="dock-secondary">
+      <button type="button" class="btn ghost" data-action="ask-leave">退出房间</button>
+      ${canManage() ? `<button type="button" class="btn ghost" data-action="ask-end">关闭房间</button>` : ""}
+    </div>
+  </div>`;
 }
 
 function renderSettlement() {
