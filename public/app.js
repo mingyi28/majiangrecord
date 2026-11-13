@@ -706,6 +706,7 @@ function renderModal() {
   if (state.dialog === "record") {
     const parsed = scoreState();
     const selfId = currentPlayerId();
+    const selfPlayer = state.room.players.find((player) => player.id === selfId);
     const otherPlayers = state.room.players.filter((player) => !player.leftAt && player.id !== selfId);
     const editingRound = state.room.rounds.find((round) => round.id === state.editingRoundId);
     const settlingRound = state.room.rounds.find((round) => round.id === state.settlingRoundId);
@@ -717,8 +718,13 @@ function renderModal() {
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
         ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
-        <div class="paid-total"><span>本局付出的总分</span><strong id="paid-total">${formatDelta(-parsed.paid)}</strong></div>
-        <div class="score-list">${otherPlayers.map((player) => {
+        <div class="score-list">
+          ${selfPlayer ? `<div class="score-row self-score-row">
+            <span class="avatar">${avatarSvg(selfPlayer.avatar)}</span>
+            <span class="score-person"><b>${esc(selfPlayer.name)}<em class="self-marker">我</em></b><small data-transfer-player="${esc(selfPlayer.id)}">${esc(transferSummary(selfPlayer.id, targetRound))}</small></span>
+            <span class="self-paid"><small>本局</small><strong id="paid-total">${formatDelta(-parsed.paid)}</strong></span>
+          </div>` : ""}
+          ${otherPlayers.map((player) => {
           return `<label class="score-row">
             <span class="avatar">${avatarSvg(player.avatar)}</span>
             <span class="score-person"><b>${esc(player.name)}</b><small data-transfer-player="${esc(player.id)}">${esc(transferSummary(player.id, targetRound))}</small></span>
