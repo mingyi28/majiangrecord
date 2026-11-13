@@ -667,12 +667,15 @@ function renderModal() {
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
         ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
-        <div class="score-list">${otherPlayers.map((player) => `
-          <label class="score-row">
+        <div class="score-list">${otherPlayers.map((player) => {
+          const displayedScore = targetRound ? Number(targetRound.deltas?.[player.id] || 0) : player.total;
+          const scoreLabel = targetRound ? "本局" : "当前";
+          return `<label class="score-row">
             <span class="avatar">${avatarSvg(player.avatar)}</span>
-            <span class="score-person"><b>${esc(player.name)}</b><small>当前 ${formatDelta(player.total)}</small></span>
+            <span class="score-person"><b>${esc(player.name)}</b><small>${scoreLabel} ${formatDelta(displayedScore)}</small></span>
             <span class="score-box"><i>＋</i><input class="score-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" placeholder="0" aria-label="给${esc(player.name)}增加的分数"></span>
-          </label>`).join("")}
+          </label>`;
+        }).join("")}
         </div>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
