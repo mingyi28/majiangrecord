@@ -24,6 +24,7 @@ const state = {
   profileHistory: null,
   profileLoading: false,
   editingProfileId: "",
+  onboardingProfile: false,
   homeError: "",
   busy: false,
   toastTimer: 0,
@@ -739,7 +740,7 @@ function renderModal() {
   if (state.dialog === "profile") return renderRoleModal();
   if (state.dialog === "profile-edit") {
     return renderIdentityEditor({
-      title: state.editingProfileId ? "修改角色" : "新角色",
+      title: state.onboardingProfile ? "设置用户名和头像" : state.editingProfileId ? "修改角色" : "新角色",
       copy: "",
       action: "save-profile",
       buttonText: "保存",
@@ -1185,6 +1186,20 @@ function prepareIdentity(profile = activeProfile()) {
   state.editingProfileId = profile ? profile.id : "";
 }
 
+function prepareProfileOnboarding() {
+  if (activeProfile()) return;
+  state.onboardingProfile = true;
+  prepareIdentity(null);
+  state.dialog = "profile-edit";
+}
+
+function closeProfileEditor() {
+  state.dialog = state.onboardingProfile ? "" : "profile";
+  state.editingProfileId = "";
+  state.onboardingProfile = false;
+  paint();
+}
+
 function focusSoon(selector) {
   requestAnimationFrame(() => {
     const element = document.querySelector(selector);
@@ -1253,11 +1268,13 @@ function saveRole() {
     toast("选一个头像");
     return;
   }
+  const onboarding = state.onboardingProfile;
   saveProfile(name, state.pickedAvatar, state.editingProfileId);
-  state.dialog = "profile";
+  state.dialog = onboarding ? "" : "profile";
   state.editingProfileId = "";
+  state.onboardingProfile = false;
   paint();
-  loadProfileHistory();
+  if (!onboarding) loadProfileHistory();
 }
 
 async function sendFeedback() {
@@ -1287,7 +1304,11 @@ function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
-      state.dialog = state.dialog === "profile-edit" ? "profile" : "";
+      if (state.dialog === "profile-edit") {
+        closeProfileEditor();
+        return;
+      }
+      state.dialog = "";
       state.editingProfileId = "";
       state.editingRoundId = "";
       state.settlingRoundId = "";
@@ -1340,11 +1361,13 @@ function onClick(event) {
   else if (action === "confirm-create") createRoom();
   else if (action === "edit-profile") {
     const profile = loadProfiles().find((item) => item.id === button.dataset.profile) || activeProfile();
+    state.onboardingProfile = false;
     prepareIdentity(profile);
     state.dialog = "profile-edit";
     paint();
     focusSoon("#identity-name");
   } else if (action === "new-profile") {
+    state.onboardingProfile = false;
     prepareIdentity(null);
     state.dialog = "profile-edit";
     paint();
@@ -1373,9 +1396,7 @@ function onClick(event) {
     state.settlingRoundId = "";
     paint();
   } else if (action === "cancel-profile-edit") {
-    state.dialog = "profile";
-    state.editingProfileId = "";
-    paint();
+    closeProfileEditor();
   } else if (action === "confirm-end") confirmEnd();
   else if (action === "confirm-disband") confirmDisband();
   else if (action === "ask-disband") {
@@ -1424,7 +1445,11 @@ function onSubmit(event) {
 
 function onKeydown(event) {
   if (event.key === "Escape" && state.dialog) {
-    state.dialog = state.dialog === "profile-edit" ? "profile" : "";
+    if (state.dialog === "profile-edit") {
+      closeProfileEditor();
+      return;
+    }
+    state.dialog = "";
     state.editingProfileId = "";
     paint();
     return;
@@ -1632,6 +1657,7 @@ function route() {
     state.view = "home";
     state.panel = null;
     state.dialog = "";
+    prepareProfileOnboarding();
     paint();
     refreshActiveRoomOnHome();
     return;
