@@ -431,6 +431,7 @@ input:focus { border-color: var(--cyan); }
 }
 
 .player.leader { box-shadow: inset 0 0 0 1.5px #8fe4ea, var(--shadow); }
+.player.departed { opacity: 0.62; }
 
 .avatar { width: 40px; height: 40px; display: block; }
 .avatar svg { width: 100%; height: 100%; display: block; }
@@ -464,6 +465,15 @@ input:focus { border-color: var(--cyan); }
   border-radius: 999px;
   background: #fff0d7;
   color: #9b681d;
+  font-weight: 800;
+}
+.left-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #edf1f3;
+  color: #718087;
   font-weight: 800;
 }
 

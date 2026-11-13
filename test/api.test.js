@@ -285,6 +285,26 @@ test("one profile can only sit in one active room", async () => {
       body: { name: "阿明", avatar: "bunny", profileId },
     });
     assert.equal(seated.status, 201);
+    const companion = await send(base, `/api/rooms/${first.data.code}/players`, {
+      method: "POST",
+      body: { name: "小李", avatar: "cat", profileId: "profile-stays-behind" },
+    });
+    const third = await send(base, `/api/rooms/${first.data.code}/players`, {
+      method: "POST",
+      body: { name: "小王", avatar: "fox", profileId: "profile-third-player" },
+    });
+    const scored = await send(base, `/api/rooms/${first.data.code}/rounds`, {
+      method: "POST",
+      token: seated.data.token,
+      body: {
+        deltas: {
+          [seated.data.player.id]: 0,
+          [companion.data.player.id]: 12,
+          [third.data.player.id]: 0,
+        },
+      },
+    });
+    assert.equal(scored.status, 201);
 
     const blocked = await send(base, `/api/rooms/${second.data.code}/players`, {
       method: "POST",
@@ -293,17 +313,54 @@ test("one profile can only sit in one active room", async () => {
     assert.equal(blocked.status, 409);
     assert.match(blocked.data.error, new RegExp(first.data.code));
 
-    const ended = await send(base, `/api/rooms/${first.data.code}/end`, {
+    const left = await send(base, `/api/rooms/${first.data.code}/leave`, {
       method: "POST",
-      token: first.data.hostToken,
+      token: seated.data.token,
       body: {},
     });
-    assert.equal(ended.status, 200);
+    assert.equal(left.status, 200);
+    assert.equal(left.data.room.status, "active");
+    const departed = left.data.room.players.find((player) => player.id === seated.data.player.id);
+    assert.ok(departed.leftAt);
+    assert.equal(departed.total, -12);
+
+    const continued = await send(base, `/api/rooms/${first.data.code}/rounds`, {
+      method: "POST",
+      token: companion.data.token,
+      body: {
+        deltas: { [companion.data.player.id]: 0, [third.data.player.id]: 7 },
+      },
+    });
+    assert.equal(continued.status, 201);
+
+    const staleToken = await send(base, `/api/rooms/${first.data.code}/rounds`, {
+      method: "POST",
+      token: seated.data.token,
+      body: { deltas: { [companion.data.player.id]: 0 } },
+    });
+    assert.equal(staleToken.status, 401);
+
     const moved = await send(base, `/api/rooms/${second.data.code}/players`, {
       method: "POST",
       body: { name: "阿明", avatar: "bunny", profileId },
     });
     assert.equal(moved.status, 201);
+
+    const leftSecond = await send(base, `/api/rooms/${second.data.code}/leave`, {
+      method: "POST",
+      token: moved.data.token,
+      body: {},
+    });
+    assert.equal(leftSecond.status, 200);
+
+    const returned = await send(base, `/api/rooms/${first.data.code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "bunny", profileId },
+    });
+    assert.equal(returned.status, 201);
+    assert.equal(returned.data.player.id, seated.data.player.id);
+    assert.equal(returned.data.player.total, -12);
+    assert.equal(returned.data.player.leftAt, null);
   });
 });
 

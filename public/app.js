@@ -320,10 +320,10 @@ function currentPlayerId() {
   const players = state.room?.players || [];
   const profile = activeProfile();
   const remembered = profile?.seats?.[state.code];
-  if (remembered && state.session.players?.[remembered] && players.some((player) => player.id === remembered)) {
+  if (remembered && state.session.players?.[remembered] && players.some((player) => player.id === remembered && !player.leftAt)) {
     return remembered;
   }
-  const local = players.filter((player) => state.session.players?.[player.id]);
+  const local = players.filter((player) => !player.leftAt && state.session.players?.[player.id]);
   return local.length === 1 ? local[0].id : "";
 }
 
@@ -378,7 +378,7 @@ function parseScore(raw) {
 }
 
 function scoreState() {
-  const players = state.room?.players || [];
+  const players = (state.room?.players || []).filter((player) => !player.leftAt);
   const selfId = currentPlayerId();
   const editing = Boolean(state.editingRoundId || state.settlingRoundId);
   let any = false;
@@ -506,13 +506,14 @@ function renderPlayer(player) {
   const mine = currentPlayerId() === player.id;
   const host = state.room.hostPlayerId === player.id || (!state.room.hostPlayerId && Boolean(state.session.hostToken) && mine);
   const leader = leaderId() === player.id ? " leader" : "";
+  const departed = player.leftAt ? " departed" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
   const score = `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
-  return `<li class="player${leader}">
+  return `<li class="player${leader}${departed}">
     <span class="avatar">${avatarSvg(player.avatar)}</span>
     <div class="who">
       <strong>${esc(player.name)}</strong>
-      ${host || mine ? `<em>${host ? `<span class="host-badge">房主</span>` : ""}${mine ? `<span class="me">我</span>` : ""}</em>` : ""}
+      ${host || mine || player.leftAt ? `<em>${host ? `<span class="host-badge">房主</span>` : ""}${mine ? `<span class="me">我</span>` : ""}${player.leftAt ? `<span class="left-badge">已退出</span>` : ""}</em>` : ""}
     </div>
     ${score}
   </li>`;
@@ -542,6 +543,9 @@ function renderDock() {
   const seated = Boolean(selfId);
   const parts = [];
   if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
+  if (selfId) {
+    parts.push(`<button type="button" class="btn ghost" data-action="ask-leave">退出房间</button>`);
+  }
   if (canManage()) {
     parts.push(`<button type="button" class="btn ghost" data-action="ask-end">关闭房间</button>`);
   }
@@ -566,10 +570,11 @@ function renderSettlement() {
 
 function renderTable() {
   if (state.panel === "sit" || state.panel === "edit") return renderSeat();
-  const count = `${state.room.players.length} 人`;
+  const activePlayers = state.room.players.filter((player) => !player.leftAt);
+  const count = `${activePlayers.length} 人`;
   const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已关闭" : count;
   const active = state.room.status === "active";
-  const compactRoomCode = active && state.room.players.length > 4;
+  const compactRoomCode = active && activePlayers.length > 4;
   return `<div class="screen">
     <header class="top${compactRoomCode ? " room-code-in-header" : ""}">
       <button type="button" class="home-link" data-action="home">首页</button>
@@ -661,7 +666,7 @@ function renderModal() {
   if (state.dialog === "record") {
     const parsed = scoreState();
     const selfId = currentPlayerId();
-    const otherPlayers = state.room.players.filter((player) => player.id !== selfId);
+    const otherPlayers = state.room.players.filter((player) => !player.leftAt && player.id !== selfId);
     const editingRound = state.room.rounds.find((round) => round.id === state.editingRoundId);
     const settlingRound = state.room.rounds.find((round) => round.id === state.settlingRoundId);
     const targetRound = editingRound || settlingRound;
@@ -732,6 +737,18 @@ function renderModal() {
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="back-role">返回</button>
           <button type="button" class="btn primary" data-action="send-feedback">提交</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  if (state.dialog === "leave") {
+    return `<div class="modal-root">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="leave-title">
+        <h2 id="leave-title">退出房间？</h2>
+        <p>只会退出你自己，房间和已有战绩都会保留，其他人可以继续记分。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="cancel-dialog">继续留在房间</button>
+          <button type="button" class="btn primary" data-action="confirm-leave">确认退出</button>
         </div>
       </div>
     </div>`;
@@ -846,11 +863,11 @@ async function loadRoom(code) {
     const alreadySeated = Boolean(
       rememberedId
       && state.session.players?.[rememberedId]
-      && state.room.players.some((player) => player.id === rememberedId)
+      && state.room.players.some((player) => player.id === rememberedId && !player.leftAt)
     );
     if (state.room.status === "active" && profile && !alreadySeated) {
       if (profile.activeRoom && profile.activeRoom !== code) {
-        throw new Error(`你还在房间 ${profile.activeRoom}，请先关闭后再加入`);
+        throw new Error(`你还在房间 ${profile.activeRoom}，请先退出后再加入`);
       }
       const seated = await request(`/api/rooms/${code}/players`, {
         method: "POST",
@@ -896,7 +913,7 @@ async function refreshActiveRoomOnHome() {
       try {
         const data = await send(`/api/rooms/${recent.code}`, {}, "");
         const playerId = profile.seats?.[recent.code];
-        if (data.room.status === "active" && data.room.players.some((player) => player.id === playerId)) {
+        if (data.room.status === "active" && data.room.players.some((player) => player.id === playerId && !player.leftAt)) {
           code = recent.code;
           setActiveRoom(profile.id, code);
           remember(data.room);
@@ -926,12 +943,12 @@ async function refreshRoom() {
   if (document.hidden || state.view !== "table" || !state.code) return;
   try {
     const data = await request(`/api/rooms/${state.code}`);
-    const previousIds = (state.room?.players || []).map((player) => player.id).join();
+    const previousIds = (state.room?.players || []).map((player) => `${player.id}:${player.leftAt || ""}`).join();
     const previousRound = state.room?.rounds?.[0];
     const previousRoundKey = previousRound ? `${previousRound.id}:${previousRound.updatedAt || previousRound.createdAt}` : "";
     const previousStatus = state.room?.status;
     state.room = data.room;
-    const nextIds = data.room.players.map((player) => player.id).join();
+    const nextIds = data.room.players.map((player) => `${player.id}:${player.leftAt || ""}`).join();
     const nextRound = data.room.rounds[0];
     const nextRoundKey = nextRound ? `${nextRound.id}:${nextRound.updatedAt || nextRound.createdAt}` : "";
     if (data.room.status !== "active") clearActiveRoom(state.code);
@@ -989,7 +1006,7 @@ async function saveSit() {
   await guard(async () => {
     const profile = saveProfile(name, state.pickedAvatar, activeProfile()?.id || "");
     if (profile.activeRoom && profile.activeRoom !== state.code) {
-      toast(`你还在房间 ${profile.activeRoom}，请先结束后再加入`);
+      toast(`你还在房间 ${profile.activeRoom}，请先退出后再加入`);
       return;
     }
     const data = await request(`/api/rooms/${state.code}/players`, {
@@ -1040,7 +1057,8 @@ async function removePlayer() {
 }
 
 function openRecord(roundId = "") {
-  if ((state.room?.players.length || 0) < 2) {
+  const activePlayers = (state.room?.players || []).filter((player) => !player.leftAt);
+  if (activePlayers.length < 2) {
     toast("至少两位才能记分");
     return;
   }
@@ -1056,7 +1074,7 @@ function openRecord(roundId = "") {
   state.settlingRoundId = settlingRound?.id || "";
   state.editingRoundId = roundId && !settlingRound ? roundId : "";
   state.scores = {};
-  for (const player of state.room.players) state.scores[player.id] = "";
+  for (const player of activePlayers) state.scores[player.id] = "";
   const targetRound = settlingRound || (roundId ? requested : null);
   if (targetRound) {
     const selfId = currentPlayerId();
@@ -1105,6 +1123,32 @@ async function confirmEnd() {
     state.panel = null;
     paint();
     toast("房间已关闭");
+  });
+}
+
+async function confirmLeave() {
+  const selfId = currentPlayerId();
+  const token = state.session.players?.[selfId];
+  if (!selfId || !token) {
+    toast("你已经不在这个房间了");
+    return;
+  }
+  await guard(async () => {
+    const data = await send(`/api/rooms/${state.code}/leave`, {
+      method: "POST",
+      body: "{}",
+    }, token);
+    delete state.session.players[selfId];
+    saveSession();
+    const profile = activeProfile();
+    if (profile) setActiveRoom(profile.id, "");
+    state.room = data.room;
+    remember(data.room);
+    state.dialog = "";
+    stopPoll();
+    history.pushState(null, "", "/");
+    route();
+    toast("已退出房间");
   });
 }
 
@@ -1385,6 +1429,9 @@ function onClick(event) {
   else if (action === "ask-end") {
     state.dialog = "end";
     paint();
+  } else if (action === "ask-leave") {
+    state.dialog = "leave";
+    paint();
   } else if (action === "cancel-dialog") {
     state.dialog = "";
     state.editingRoundId = "";
@@ -1393,6 +1440,7 @@ function onClick(event) {
   } else if (action === "cancel-profile-edit") {
     closeProfileEditor();
   } else if (action === "confirm-end") confirmEnd();
+  else if (action === "confirm-leave") confirmLeave();
   else if (action === "open-admin-room") {
     state.adminOpen = button.dataset.code || "";
     state.adminPlayerRank = 0;

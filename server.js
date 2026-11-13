@@ -341,6 +341,14 @@ function createApp(store) {
         return;
       }
 
+      if (req.method === "POST" && rest === "/leave") {
+        const auth = await requireAuth(code, bearer(req));
+        if (!auth.playerId) throw new AppError(403, "请先以自己的角色坐下再退出");
+        await readJson(req);
+        send(res, 200, await store.leavePlayer(code, auth.playerId));
+        return;
+      }
+
       const playerMatch = rest.match(/^\/players\/([^/]+)$/);
       if (playerMatch && req.method === "DELETE") {
         const playerId = playerMatch[1];
