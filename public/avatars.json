@@ -1,0 +1,18 @@
+[
+  { "id": "tile-zhong", "kind": "tile", "label": "红中", "glyph": "中", "ink": "#9d2b24", "paper": "#f4efe4" },
+  { "id": "tile-fa", "kind": "tile", "label": "发财", "glyph": "发", "ink": "#1d6b45", "paper": "#f4efe4" },
+  { "id": "tile-bai", "kind": "tile", "label": "白板", "glyph": "白", "ink": "#3d4a55", "paper": "#f7f4ee" },
+  { "id": "tile-dong", "kind": "tile", "label": "东", "glyph": "东", "ink": "#1d3f66", "paper": "#f4efe4" },
+  { "id": "tile-nan", "kind": "tile", "label": "南", "glyph": "南", "ink": "#1d3f66", "paper": "#f4efe4" },
+  { "id": "tile-xi", "kind": "tile", "label": "西", "glyph": "西", "ink": "#1d3f66", "paper": "#f4efe4" },
+  { "id": "tile-bei", "kind": "tile", "label": "北", "glyph": "北", "ink": "#1d3f66", "paper": "#f4efe4" },
+  { "id": "tile-wan", "kind": "tile", "label": "万", "glyph": "万", "ink": "#8a3d2f", "paper": "#f4efe4" },
+  { "id": "face-an", "kind": "face", "label": "短发", "skin": "#f0c3a0", "hair": "#241c16", "cloth": "#9d2b24", "style": "short", "extra": "none" },
+  { "id": "face-bo", "kind": "face", "label": "齐耳", "skin": "#e7b48f", "hair": "#1b1b1b", "cloth": "#1e4d3a", "style": "bob", "extra": "glasses" },
+  { "id": "face-cui", "kind": "face", "label": "丸子头", "skin": "#f3c7a8", "hair": "#3a2418", "cloth": "#243656", "style": "bun", "extra": "blush" },
+  { "id": "face-dong", "kind": "face", "label": "帽子", "skin": "#d9a57c", "hair": "#2a211c", "cloth": "#6b4a2e", "style": "cap", "extra": "none" },
+  { "id": "face-e", "kind": "face", "label": "长发", "skin": "#f6d0b5", "hair": "#141414", "cloth": "#6e3148", "style": "long", "extra": "none" },
+  { "id": "face-fu", "kind": "face", "label": "平头", "skin": "#c98962", "hair": "#1a120e", "cloth": "#3e4a44", "style": "buzz", "extra": "none" },
+  { "id": "face-gui", "kind": "face", "label": "侧分", "skin": "#efc2a0", "hair": "#4a3424", "cloth": "#8a6232", "style": "side", "extra": "mole" },
+  { "id": "face-he", "kind": "face", "label": "发带", "skin": "#f8d2b8", "hair": "#2c211b", "cloth": "#1f5c62", "style": "band", "extra": "blush" }
+]

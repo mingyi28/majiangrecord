@@ -1,0 +1,16 @@
+{
+  "name": "mahjong-score",
+  "version": "1.0.0",
+  "private": true,
+  "description": "手机麻将记分。多人同桌输入名字、选择头像，后台保存每一局输赢。",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

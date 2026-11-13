@@ -1,0 +1,9 @@
+{
+  "name": "麻将记分",
+  "short_name": "麻将记分",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e241e",
+  "theme_color": "#0e241e",
+  "lang": "zh-CN"
+}

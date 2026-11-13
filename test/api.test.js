@@ -1,0 +1,163 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { createApp } = require("../server");
+const { createMemoryStore } = require("../lib/memory-store");
+
+async function withServer(fn) {
+  const store = createMemoryStore();
+  await store.ready();
+  const server = createApp(store);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    await fn(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+}
+
+async function send(base, path, { method = "GET", token, body } = {}) {
+  const headers = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (token) headers.authorization = `Bearer ${token}`;
+  const response = await fetch(`${base}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  return { status: response.status, data, headers: response.headers };
+}
+
+test("two phones share one running score", async () => {
+  await withServer(async (base) => {
+    const created = await send(base, "/api/rooms", { method: "POST", body: {} });
+    assert.equal(created.status, 201);
+    const code = created.data.code;
+    assert.match(code, /^[A-Z0-9]{8}$/);
+
+    const host = created.data.hostToken;
+    const ming = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "tile-zhong" },
+    });
+    const li = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "小李", avatar: "face-bo" },
+    });
+    assert.equal(ming.status, 201);
+    assert.equal(li.status, 201);
+
+    const zimo = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: ming.data.token,
+      body: { kind: "zimo", winnerId: ming.data.player.id, points: 10 },
+    });
+    assert.equal(zimo.status, 201);
+    const afterZimo = Object.fromEntries(zimo.data.room.players.map((player) => [player.name, player.total]));
+    assert.deepEqual(afterZimo, { 阿明: 10, 小李: -10 });
+
+    const seenByLi = await send(base, `/api/rooms/${code}`);
+    assert.equal(seenByLi.data.room.players.find((player) => player.name === "阿明").total, 10);
+
+    const dianpao = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: li.data.token,
+      body: {
+        kind: "dianpao",
+        winnerId: li.data.player.id,
+        payerId: ming.data.player.id,
+        points: 6,
+      },
+    });
+    assert.equal(dianpao.status, 201);
+    const totals = Object.fromEntries(dianpao.data.room.players.map((player) => [player.name, player.total]));
+    assert.deepEqual(totals, { 阿明: 4, 小李: -4 });
+
+    const latest = dianpao.data.room.rounds[0];
+    const undone = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
+      method: "DELETE",
+      token: host,
+    });
+    assert.equal(undone.status, 200);
+    assert.equal(undone.data.room.rounds.length, 1);
+    assert.equal(undone.data.room.players.find((player) => player.name === "阿明").total, 10);
+  });
+});
+
+test("scoring requires a seat token from this room", async () => {
+  await withServer(async (base) => {
+    const first = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const second = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const code = first.data.code;
+    const ming = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "tile-fa" },
+    });
+    await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "小李", avatar: "tile-bai" },
+    });
+    const outsider = await send(base, `/api/rooms/${second.data.code}/players`, {
+      method: "POST",
+      body: { name: "外人", avatar: "tile-dong" },
+    });
+
+    const missing = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      body: { kind: "zimo", winnerId: ming.data.player.id, points: 2 },
+    });
+    assert.equal(missing.status, 401);
+
+    const foreign = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: outsider.data.token,
+      body: { kind: "zimo", winnerId: ming.data.player.id, points: 2 },
+    });
+    assert.equal(foreign.status, 401);
+
+    const badName = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "   ", avatar: "tile-zhong" },
+    });
+    assert.equal(badName.status, 400);
+
+    const badAvatar = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "小王", avatar: "<script>" },
+    });
+    assert.equal(badAvatar.status, 400);
+  });
+});
+
+test("a full table stops at eight and names are stored as text", async () => {
+  await withServer(async (base) => {
+    const created = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const code = created.data.code;
+    for (let i = 0; i < 8; i += 1) {
+      const joined = await send(base, `/api/rooms/${code}/players`, {
+        method: "POST",
+        body: { name: `玩家${i}<b>`, avatar: "face-an" },
+      });
+      assert.equal(joined.status, 201);
+      assert.equal(joined.data.player.name, `玩家${i}<b>`);
+    }
+    const overflow = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "第九人", avatar: "face-e" },
+    });
+    assert.equal(overflow.status, 409);
+
+    const page = await send(base, "/");
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get("content-security-policy"), /script-src 'self'/);
+    const html = await fetch(`${base}/`).then((response) => response.text());
+    assert.match(html, /麻将记分/);
+    assert.doesNotMatch(html, /<script(?! src="\/app\.js")/);
+
+    const leaked = await fetch(`${base}/..%2fpackage.json`);
+    assert.equal(leaked.status, 404);
+    const serverFile = await fetch(`${base}/server.js`);
+    assert.equal(serverFile.status, 404);
+  });
+});
