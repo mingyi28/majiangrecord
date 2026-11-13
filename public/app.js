@@ -565,23 +565,25 @@ function renderTable() {
   const count = `${state.room.players.length} 人`;
   const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已关闭" : count;
   const active = state.room.status === "active";
+  const compactRoomCode = active && state.room.players.length > 4;
   return `<div class="screen">
-    <header class="top">
+    <header class="top${compactRoomCode ? " room-code-in-header" : ""}">
       <button type="button" class="home-link" data-action="home">首页</button>
+      ${compactRoomCode ? `<button type="button" class="top-room-number" data-action="copy" aria-label="复制房间号 ${esc(state.code)}">
+        <small>房间号</small>
+        <strong>${esc(state.code)}</strong>
+      </button>` : ""}
       <span class="meta">${meta}</span>
       <div class="role-button compact role-display">
         ${activeProfile() ? `<span class="avatar">${avatarSvg(activeProfile().avatar)}</span><span>${esc(activeProfile().name)}</span>` : "未选择角色"}
       </div>
     </header>
-    ${active ? `<div class="room-code-card">
+    ${active && !compactRoomCode ? `<div class="room-code-card">
       <button type="button" class="room-number" data-action="copy" aria-label="复制房间号">
         <small>房间号 · 点击复制</small>
         <strong>${esc(state.code)}</strong>
       </button>
-      <div class="room-actions">
-        <button type="button" class="room-link primary-link" data-action="share">分享</button>
-      </div>
-    </div>` : renderSettlement()}
+    </div>` : active ? "" : renderSettlement()}
     <div class="body">
       <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
       ${renderHistory()}
@@ -1091,24 +1093,6 @@ async function copyCode() {
   }
 }
 
-async function shareRoom() {
-  const url = location.href;
-  if (navigator.share) {
-    try {
-      await navigator.share({ url });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    toast("链接已复制");
-  } catch {
-    toast(`房间号 ${state.code}`);
-  }
-}
-
 function prepareIdentity(profile = activeProfile()) {
   state.draftName = profile ? profile.name : "";
   state.pickedAvatar = profile ? profile.avatar : (state.avatars[0]?.id || "");
@@ -1271,7 +1255,6 @@ function onClick(event) {
     history.pushState(null, "", "/");
     route();
   } else if (action === "copy") copyCode();
-  else if (action === "share") shareRoom();
   else if (action === "role") openRole();
   else if (action === "open-sit") {
     state.panel = "sit";

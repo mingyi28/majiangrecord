@@ -239,6 +239,7 @@ input:focus { border-color: var(--cyan); }
 
 .top {
   flex: none;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -267,11 +268,52 @@ input:focus { border-color: var(--cyan); }
   font-weight: 700;
 }
 
+.room-code-in-header {
+  justify-content: space-between;
+}
+
+.room-code-in-header .meta {
+  display: none;
+}
+
+.room-code-in-header .role-display {
+  max-width: 100px;
+}
+
+.top-room-number {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 13px;
+  background: white;
+  min-width: 82px;
+  padding: 4px 9px;
+  color: var(--cyan-deep);
+  box-shadow: var(--shadow);
+}
+
+.top-room-number small,
+.top-room-number strong {
+  display: block;
+  line-height: 1.05;
+}
+
+.top-room-number small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.top-room-number strong {
+  margin-top: 2px;
+  font-size: 17px;
+  letter-spacing: 0.09em;
+}
+
 .room-code-card {
   flex: none;
   display: flex;
   align-items: stretch;
-  gap: 8px;
   margin-top: 10px;
 }
 
@@ -297,34 +339,6 @@ input:focus { border-color: var(--cyan); }
   font-size: 30px;
   line-height: 1;
   letter-spacing: 0.2em;
-}
-
-.room-actions {
-  width: 76px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-
-.room-link {
-  border: 0;
-  border-radius: 14px;
-  background: white;
-  min-height: 34px;
-  padding: 0 7px;
-  font-weight: 800;
-  color: var(--cyan-deep);
-  white-space: nowrap;
-}
-
-.room-link.primary-link {
-  background: var(--cyan-deep);
-  color: white;
-}
-
-.room-link.danger-link {
-  color: #8b6262;
-  background: #fff8f6;
 }
 
 .settlement-card {
