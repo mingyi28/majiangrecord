@@ -621,20 +621,18 @@ function renderRoleModal() {
     </div>`).join("");
   const stats = state.profileLoading
     ? `<div class="profile-stats skeleton-stats">${[1, 2, 3].map(() => `<div><i></i><span></span></div>`).join("")}</div>`
-    : history
-    ? `<div class="profile-stats">
-        <div><b>${history.rooms}</b><span>房间</span></div>
-        <div><b>${history.rounds}</b><span>对局</span></div>
-        <div><b>${formatDelta(history.total)}</b><span>总分</span></div>
-      </div>`
-    : `<p class="hint">还没有历史战绩</p>`;
+    : `<div class="profile-stats">
+        <div><b>${history?.rooms || 0}</b><span>房间</span></div>
+        <div><b>${history?.rounds || 0}</b><span>对局</span></div>
+        <div><b>${formatDelta(history?.total || 0)}</b><span>总分</span></div>
+      </div>`;
   const records = state.profileLoading
-    ? `<div class="profile-records skeleton-records">${[1, 2].map(() => `<div><i></i><span></span><i></i></div>`).join("")}</div>`
+    ? `<div class="profile-records skeleton-records">${[1, 2, 3, 4, 5].map(() => `<div><i></i><span></span><i></i></div>`).join("")}</div>`
     : history && history.records.length
     ? `<div class="profile-records">${history.records.map((item) => `
         <div><b>${esc(item.code)}</b><span>${item.rounds} 局</span><strong class="${item.total > 0 ? "up" : item.total < 0 ? "down" : ""}">${esc(formatDelta(item.total))}</strong></div>
       `).join("")}</div>`
-    : "";
+    : `<div class="profile-records profile-records-empty"><p>还没有历史战绩</p></div>`;
   return `<div class="modal-root">
     <div class="modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="role-title">
       <div class="modal-heading">

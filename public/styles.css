@@ -632,6 +632,7 @@ input:focus { border-color: var(--cyan); }
 .identity-modal { width: min(360px, 100%); }
 .identity-modal .name-input { margin-top: 14px; }
 .identity-modal .picks { margin-top: 16px; }
+.profile-modal { animation: none; }
 
 textarea {
   width: 100%;
@@ -711,6 +712,7 @@ textarea:focus { border-color: var(--cyan); }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  height: 58px;
 }
 
 .profile-stats > div {
@@ -723,11 +725,18 @@ textarea:focus { border-color: var(--cyan); }
 .profile-stats b, .profile-stats span { display: block; }
 .profile-stats b { font-size: 20px; color: var(--cyan-deep); }
 .profile-stats span { font-size: 11px; color: var(--muted); }
-.profile-records { max-height: 130px; overflow: auto; margin-top: 8px; }
+.profile-records { height: 130px; overflow: auto; margin-top: 8px; }
 .profile-records > div { gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); }
 .profile-records span { flex: 1; color: var(--muted); font-size: 12px; }
 .profile-records strong.up { color: #ef5d7a; }
 .profile-records strong.down { color: #537078; }
+.profile-records-empty {
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #f8fdfd;
+}
+.profile-records-empty p { margin: 0; font-size: 12px; }
 .skeleton-stats i, .skeleton-stats span, .skeleton-records i, .skeleton-records span {
   display: block;
   border-radius: 999px;
