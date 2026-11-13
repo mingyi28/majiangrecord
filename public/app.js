@@ -311,7 +311,7 @@ function renderHome() {
       <button type="button" class="btn primary" data-action="create">开一桌</button>
       <form id="join-form" class="stack">
         <label for="join-code">房间号</label>
-        <input id="join-code" class="code-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="38421" aria-label="五位数字房间号">
+        <input id="join-code" class="code-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00000" aria-label="五位数字房间号">
         <button class="btn mint" type="submit">进入</button>
       </form>
       ${nickname ? `<p class="hint">称呼已记住：${esc(nickname)}，下次直接用</p>` : `<p class="hint">第一次坐下后，称呼会记在这台手机上</p>`}
