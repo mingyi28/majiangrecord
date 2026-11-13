@@ -275,6 +275,7 @@ function createApp(store) {
 
       if (req.method === "POST" && rest === "/rounds") {
         const auth = await requireAuth(code, bearer(req));
+        if (!auth.playerId) throw new AppError(403, "请先以自己的角色坐下再记分");
         const body = await readJson(req);
         const saved = await store.addRound(
           code,

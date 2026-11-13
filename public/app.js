@@ -237,6 +237,17 @@ function localIds() {
   return new Set(Object.keys(state.session.players || {}));
 }
 
+function currentPlayerId() {
+  const players = state.room?.players || [];
+  const profile = activeProfile();
+  const remembered = profile?.seats?.[state.code];
+  if (remembered && state.session.players?.[remembered] && players.some((player) => player.id === remembered)) {
+    return remembered;
+  }
+  const local = players.filter((player) => state.session.players?.[player.id]);
+  return local.length === 1 ? local[0].id : "";
+}
+
 function playerName(id) {
   return state.room?.players.find((player) => player.id === id)?.name || "有人";
 }
@@ -310,11 +321,16 @@ function parseScore(raw) {
 
 function scoreState() {
   const players = state.room?.players || [];
+  const selfId = currentPlayerId();
   let sum = 0;
   let any = false;
   let bad = false;
   const deltas = {};
   for (const player of players) {
+    if (player.id === selfId) {
+      deltas[player.id] = 0;
+      continue;
+    }
     const parsed = parseScore(state.scores[player.id] ?? "");
     if (!parsed.ok) bad = true;
     deltas[player.id] = parsed.value;
@@ -324,7 +340,7 @@ function scoreState() {
   let hint = "给至少一人增加分数";
   if (bad) hint = "只能输入 0 或正整数";
   else if (any) hint = `本局共加 ${sum} 分`;
-  return { ok: !bad && any && players.length >= 2, deltas, hint };
+  return { ok: Boolean(selfId) && !bad && any && players.length >= 2, deltas, hint };
 }
 
 function updateSum() {
@@ -411,7 +427,7 @@ function renderSeat() {
 }
 
 function renderPlayer(player) {
-  const mine = localIds().has(player.id);
+  const mine = currentPlayerId() === player.id;
   const wind = WINDS[(Math.max(player.seat, 1) - 1) % WINDS.length];
   const leader = leaderId() === player.id ? " leader" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
@@ -448,11 +464,14 @@ function renderHistory() {
 function renderDock() {
   if (state.room.status === "dissolved") return `<p class="ended">这桌已经解散，记录留在管理端</p>`;
   if (state.room.status === "ended") return `<p class="ended">这桌已经结束，总分留在这里</p>`;
-  const seated = [...localIds()].some((id) => state.room.players.some((player) => player.id === id));
+  const selfId = currentPlayerId();
+  const seated = Boolean(selfId);
   const parts = [];
   if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
   if (canManage() && state.room.players.length >= 2) {
     parts.push(`<button type="button" class="btn ghost" data-action="ask-end">结束对局</button>`);
+  }
+  if (selfId && state.room.players.length >= 2) {
     parts.push(`<button type="button" class="btn primary" data-action="open-record">记一局</button>`);
   } else if (seated) {
     parts.push(`<p class="ended">再等一位坐下就能记分</p>`);
@@ -549,13 +568,15 @@ function renderRoleModal() {
 function renderModal() {
   if (state.dialog === "record") {
     const parsed = scoreState();
+    const selfId = currentPlayerId();
+    const otherPlayers = state.room.players.filter((player) => player.id !== selfId);
     return `<div class="modal-root">
       <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
         <div class="modal-heading">
-          <div><h2 id="score-title">记一局</h2><p>只填写本局增加的分数，空着就是 0。</p></div>
+          <div><h2 id="score-title">记一局</h2><p>给其他人增加分数，不能给自己加分。</p></div>
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
-        <div class="score-list">${state.room.players.map((player) => `
+        <div class="score-list">${otherPlayers.map((player) => `
           <label class="score-row">
             <span class="avatar">${avatarSvg(player.avatar)}</span>
             <span class="score-person"><b>${esc(player.name)}</b><small>当前 ${formatDelta(player.total)}</small></span>
@@ -826,6 +847,10 @@ function openRecord() {
     toast("至少两位才能记分");
     return;
   }
+  if (!currentPlayerId()) {
+    toast("请先以自己的角色坐下");
+    return;
+  }
   state.dialog = "record";
   state.scores = {};
   for (const player of state.room.players) state.scores[player.id] = "";
@@ -835,15 +860,16 @@ function openRecord() {
 
 async function commitScores() {
   const parsed = scoreState();
+  const selfId = currentPlayerId();
   if (!parsed.ok) {
     toast(parsed.hint);
     return;
   }
   await guard(async () => {
-    const data = await request(`/api/rooms/${state.code}/rounds`, {
+    const data = await send(`/api/rooms/${state.code}/rounds`, {
       method: "POST",
       body: JSON.stringify({ kind: "award", deltas: parsed.deltas }),
-    });
+    }, state.session.players[selfId]);
     state.room = data.room;
     state.dialog = "";
     state.scores = {};
