@@ -305,10 +305,12 @@ function createApp(store) {
 
       if (req.method === "POST" && rest === "/players") {
         const body = await readJson(req);
+        const auth = await store.authenticate(code, bearer(req));
         const created = await store.addPlayer(code, {
           name: cleanName(body.name),
           avatar: cleanAvatar(body.avatar),
           profileId: cleanProfileId(body.profileId),
+          isHost: auth?.role === "host",
         });
         send(res, 201, created);
         return;

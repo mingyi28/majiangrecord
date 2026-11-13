@@ -500,6 +500,7 @@ function renderSeat() {
 
 function renderPlayer(player) {
   const mine = currentPlayerId() === player.id;
+  const host = state.room.hostPlayerId === player.id || (!state.room.hostPlayerId && Boolean(state.session.hostToken) && mine);
   const wind = WINDS[(Math.max(player.seat, 1) - 1) % WINDS.length];
   const leader = leaderId() === player.id ? " leader" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
@@ -508,7 +509,7 @@ function renderPlayer(player) {
     <span class="avatar">${avatarSvg(player.avatar)}</span>
     <div class="who">
       <strong>${esc(player.name)}</strong>
-      <em>${wind}${mine ? `<span class="me">我</span>` : ""}</em>
+      <em>${wind}${host ? `<span class="host-badge">房主</span>` : ""}${mine ? `<span class="me">我</span>` : ""}</em>
     </div>
     ${score}
   </li>`;
@@ -1088,18 +1089,18 @@ async function copyCode() {
 }
 
 async function shareRoom() {
-  const text = `来一起记分，房间号 ${state.code}`;
+  const url = location.href;
   if (navigator.share) {
     try {
-      await navigator.share({ title: "麻将记分", text, url: location.href });
+      await navigator.share({ url });
       return;
     } catch (error) {
       if (error && error.name === "AbortError") return;
     }
   }
   try {
-    await navigator.clipboard.writeText(`${text}\n${location.href}`);
-    toast("邀请信息已复制");
+    await navigator.clipboard.writeText(url);
+    toast("链接已复制");
   } catch {
     toast(`房间号 ${state.code}`);
   }

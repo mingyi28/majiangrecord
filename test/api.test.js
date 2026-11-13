@@ -44,6 +44,7 @@ test("two phones share one running score", async () => {
     const host = created.data.hostToken;
     const ming = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
+      token: host,
       body: { name: "阿明", avatar: "bunny", profileId: "ming-main" },
     });
     const li = await send(base, `/api/rooms/${code}/players`, {
@@ -52,6 +53,7 @@ test("two phones share one running score", async () => {
     });
     assert.equal(ming.status, 201);
     assert.equal(li.status, 201);
+    assert.equal(li.data.room.hostPlayerId, ming.data.player.id);
     const avatarLocked = await send(base, `/api/rooms/${code}/players/${ming.data.player.id}`, {
       method: "PATCH",
       token: ming.data.token,

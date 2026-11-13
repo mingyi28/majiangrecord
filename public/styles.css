@@ -398,6 +398,15 @@ input:focus { border-color: var(--cyan); }
   color: var(--cyan-deep);
   font-weight: 800;
 }
+.host-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff0d7;
+  color: #9b681d;
+  font-weight: 800;
+}
 
 .total, .score-field { grid-column: 3; justify-self: end; }
 .edit { grid-column: 4; }
