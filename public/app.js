@@ -1,4 +1,5 @@
 const WINDS = ["东", "南", "西", "北"];
+const ROUND_WINDOW_MS = 60 * 1000;
 
 const state = {
   avatars: [],
@@ -12,6 +13,7 @@ const state = {
   draftName: "",
   scores: {},
   editingRoundId: "",
+  settlingRoundId: "",
   dialog: "",
   admin: null,
   adminMode: null,
@@ -20,12 +22,10 @@ const state = {
   profileHistory: null,
   profileLoading: false,
   editingProfileId: "",
-  undoArmed: false,
   homeError: "",
   busy: false,
   toastTimer: 0,
   pollTimer: 0,
-  undoTimer: 0,
 };
 
 function esc(value) {
@@ -103,6 +103,48 @@ function digits(value) {
 function formatDelta(value) {
   const number = Number(value) || 0;
   return number > 0 ? `+${number}` : String(number);
+}
+
+function roundDeadline(round) {
+  const created = Date.parse(round?.createdAt || "");
+  return Number.isFinite(created) ? created + ROUND_WINDOW_MS : 0;
+}
+
+function isSettling(round) {
+  return roundDeadline(round) > Date.now();
+}
+
+function countdownTime(deadline) {
+  const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function countdownMarkup(round, modal = false) {
+  const deadline = roundDeadline(round);
+  if (!deadline || deadline <= Date.now()) return modal ? "" : `<em class="settled-badge">已结算</em>`;
+  return `<em class="settlement-countdown${modal ? " modal-countdown" : ""}" data-countdown="${deadline}" data-modal="${modal ? "true" : "false"}">${modal ? "对局结算中 " : "结算中 "}${countdownTime(deadline)}</em>`;
+}
+
+function updateCountdowns() {
+  document.querySelectorAll("[data-countdown]").forEach((element) => {
+    const deadline = Number(element.dataset.countdown);
+    const modal = element.dataset.modal === "true";
+    if (deadline > Date.now()) {
+      element.textContent = `${modal ? "对局结算中 " : "结算中 "}${countdownTime(deadline)}`;
+      return;
+    }
+    element.textContent = modal ? "结算时间已结束，保存后会标记为修改" : "已结算";
+    element.classList.remove("settlement-countdown");
+    element.classList.add("settled-badge");
+  });
+}
+
+function roomStatusLabel(status) {
+  if (status === "active") return "进行中";
+  if (status === "ended") return "已关闭";
+  if (status === "dissolved") return "已解散";
+  return "历史";
 }
 
 function readJsonStorage(key, fallback) {
@@ -357,7 +399,7 @@ function parseScore(raw) {
 function scoreState() {
   const players = state.room?.players || [];
   const selfId = currentPlayerId();
-  const editing = Boolean(state.editingRoundId);
+  const editing = Boolean(state.editingRoundId || state.settlingRoundId);
   let sum = 0;
   let any = false;
   let bad = false;
@@ -416,6 +458,7 @@ function renderHome() {
   const recentHtml = recents.map((item) => `
     <button type="button" class="recent" data-action="open" data-code="${esc(item.code)}">
       <span class="recent-main"><b>${esc(item.code)}</b><small>${esc(item.names.join("、") || "还没有人")}</small></span>
+      <em class="recent-status recent-status-${item.status === "active" ? "active" : item.status === "ended" ? "ended" : item.status === "dissolved" ? "dissolved" : "history"}">${roomStatusLabel(item.status)}</em>
       <time>${esc(recentTime(item.at))}</time>
       <i>›</i>
     </button>`).join("");
@@ -486,9 +529,6 @@ function renderPlayer(player) {
   const leader = leaderId() === player.id ? " leader" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
   const score = `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
-  const edit = state.room.status === "active" && canManage()
-    ? `<button type="button" class="edit" data-action="edit" data-player="${esc(player.id)}" aria-label="修改${esc(player.name)}">改</button>`
-    : "";
   return `<li class="player${leader}">
     <span class="avatar">${avatarSvg(player.avatar)}</span>
     <div class="who">
@@ -496,38 +536,35 @@ function renderPlayer(player) {
       <em>${wind}${mine ? `<span class="me">我</span>` : ""}</em>
     </div>
     ${score}
-    ${edit}
   </li>`;
 }
 
 function renderHistory() {
   const rounds = state.room.rounds || [];
   if (!rounds.length) return `<div class="history"><p class="hint">还没有对局。记一局时，给得分的人直接加分。</p></div>`;
-  const undo = state.room.status !== "ended" && canManage()
-    ? `<button type="button" class="link" data-action="undo">${state.undoArmed ? "确定撤销" : "撤销上一局"}</button>`
-    : "";
   const lines = rounds.map((round) => {
     const parts = Object.entries(round.deltas || {})
       .filter(([, delta]) => delta)
       .map(([id, delta]) => `${playerName(id)} ${formatDelta(delta)}`);
     const edited = round.editedAt ? `<em class="edited-badge">已修改</em>` : "";
-    const content = `<b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span>${edited}`;
+    const settlement = state.room.status === "active" ? countdownMarkup(round) : `<em class="settled-badge">已结算</em>`;
+    const content = `<b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span>${settlement}${edited}`;
     return state.room.status === "active" && currentPlayerId()
       ? `<button type="button" class="round round-button" data-action="edit-round" data-round="${esc(round.id)}">${content}</button>`
       : `<p class="round">${content}</p>`;
   }).join("");
-  return `<div class="history"><div class="history-head"><span>已经记下</span>${undo}</div>${lines}</div>`;
+  return `<div class="history"><div class="history-head"><span>对局记录</span></div>${lines}</div>`;
 }
 
 function renderDock() {
   if (state.room.status === "dissolved") return `<p class="ended">这桌已经解散，记录留在管理端</p>`;
-  if (state.room.status === "ended") return `<p class="ended">这桌已经结束，总分留在这里</p>`;
+  if (state.room.status === "ended") return `<p class="ended">房间已关闭，今天的战斗结束了</p>`;
   const selfId = currentPlayerId();
   const seated = Boolean(selfId);
   const parts = [];
   if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
   if (canManage() && state.room.players.length >= 2) {
-    parts.push(`<button type="button" class="btn ghost" data-action="ask-end">结束对局</button>`);
+    parts.push(`<button type="button" class="btn ghost" data-action="ask-end">关闭房间</button>`);
   }
   if (selfId && state.room.players.length >= 2) {
     parts.push(`<button type="button" class="btn primary" data-action="open-record">记一局</button>`);
@@ -537,22 +574,36 @@ function renderDock() {
   return parts.join("");
 }
 
+function renderSettlement() {
+  const ranked = state.room.players.slice().sort((a, b) => b.total - a.total || a.seat - b.seat);
+  return `<section class="settlement-card">
+    <div class="settlement-heading">
+      <div><small>${state.room.status === "dissolved" ? "房间已解散" : "今日战斗结束"}</small><h2>${state.room.rounds.length} 局 · ${state.room.players.length} 位玩家</h2></div>
+      <span>最终结算</span>
+    </div>
+    <div class="settlement-scores">${ranked.map((player, index) => `
+      <div><i>${index + 1}</i><span class="avatar">${avatarSvg(player.avatar)}</span><b>${esc(player.name)}</b><strong class="${player.total > 0 ? "up" : ""}">${esc(formatDelta(player.total))}</strong></div>
+    `).join("")}</div>
+  </section>`;
+}
+
 function renderTable() {
   if (state.panel === "sit" || state.panel === "edit") return renderSeat();
   const count = `${state.room.players.length} 人`;
-  const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已结束" : count;
-  const disband = isHost() && state.room.status !== "dissolved"
+  const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已关闭" : count;
+  const active = state.room.status === "active";
+  const disband = isHost() && active
     ? `<button type="button" class="room-link danger-link" data-action="ask-disband">解散</button>`
     : "";
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="home">首页</button>
       <span class="meta">${meta}</span>
-      <button type="button" class="role-button compact" data-action="role" aria-label="查看角色">
-        ${activeProfile() ? `<span class="avatar">${avatarSvg(activeProfile().avatar)}</span><span>角色</span>` : "角色"}
-      </button>
+      <div class="role-button compact role-display">
+        ${activeProfile() ? `<span class="avatar">${avatarSvg(activeProfile().avatar)}</span><span>${esc(activeProfile().name)}</span>` : "未选择角色"}
+      </div>
     </header>
-    <div class="room-code-card">
+    ${active ? `<div class="room-code-card">
       <button type="button" class="room-number" data-action="copy" aria-label="复制房间号">
         <small>房间号 · 点击复制</small>
         <strong>${esc(state.code)}</strong>
@@ -561,7 +612,7 @@ function renderTable() {
         <button type="button" class="room-link primary-link" data-action="share">分享</button>
         ${disband}
       </div>
-    </div>
+    </div>` : renderSettlement()}
     <div class="body">
       <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
       ${renderHistory()}
@@ -636,12 +687,15 @@ function renderModal() {
     const selfId = currentPlayerId();
     const otherPlayers = state.room.players.filter((player) => player.id !== selfId);
     const editingRound = state.room.rounds.find((round) => round.id === state.editingRoundId);
+    const settlingRound = state.room.rounds.find((round) => round.id === state.settlingRoundId);
+    const targetRound = editingRound || settlingRound;
     return `<div class="modal-root">
       <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
         <div class="modal-heading">
-          <div><h2 id="score-title">${editingRound ? `修改第${editingRound.seq}局` : "记一局"}</h2><p>给其他人增加分数，不能给自己加分。</p></div>
+          <div><h2 id="score-title">${editingRound ? `修改第${editingRound.seq}局` : settlingRound ? `第${settlingRound.seq}局结算` : "记一局"}</h2><p>给其他人增加分数，不能给自己加分。</p></div>
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
+        ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
         <div class="score-list">${otherPlayers.map((player) => `
           <label class="score-row">
             <span class="avatar">${avatarSvg(player.avatar)}</span>
@@ -652,7 +706,7 @@ function renderModal() {
         <p id="sum" class="${parsed.ok ? "sum ok" : "sum"}">${esc(parsed.hint)}</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
-          <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>${editingRound ? "保存修改" : "记下这局"}</button>
+          <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>${editingRound ? "保存修改" : targetRound ? "更新本局" : "记下这局"}</button>
         </div>
       </div>
     </div>`;
@@ -691,11 +745,11 @@ function renderModal() {
   if (state.dialog === "end") {
     return `<div class="modal-root">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title">
-        <h2 id="end-title">结束这桌？</h2>
-        <p>结束后不能再记分，总分会留下来。</p>
+        <h2 id="end-title">关闭房间？</h2>
+        <p>关闭表示今天的战斗结束了。之后不能再记分，将展示最终结算。</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">再玩一会儿</button>
-          <button type="button" class="btn primary" data-action="confirm-end">结束对局</button>
+          <button type="button" class="btn primary" data-action="confirm-end">确认关闭</button>
         </div>
       </div>
     </div>`;
@@ -720,6 +774,7 @@ function paint() {
   const view = state.view === "admin" ? renderAdmin() : state.view === "home" ? `${renderHome()}${renderModal()}` : `${renderTable()}${renderModal()}`;
   app.innerHTML = view;
   if (state.dialog === "record") updateSum();
+  updateCountdowns();
 }
 
 async function guard(fn) {
@@ -883,6 +938,7 @@ async function refreshRoom() {
     if ((data.room.status === "ended" || data.room.status === "dissolved") && state.dialog === "record") {
       state.dialog = "";
       state.editingRoundId = "";
+      state.settlingRoundId = "";
       state.scores = {};
       paint();
       return;
@@ -990,13 +1046,18 @@ function openRecord(roundId = "") {
     return;
   }
   state.dialog = "record";
-  state.editingRoundId = roundId;
+  const requested = roundId
+    ? state.room.rounds.find((item) => item.id === roundId)
+    : state.room.rounds[0];
+  const settlingRound = requested && isSettling(requested) ? requested : null;
+  state.settlingRoundId = settlingRound?.id || "";
+  state.editingRoundId = roundId && !settlingRound ? roundId : "";
   state.scores = {};
   for (const player of state.room.players) state.scores[player.id] = "";
-  if (roundId) {
+  const targetRound = settlingRound || (roundId ? requested : null);
+  if (targetRound) {
     const selfId = currentPlayerId();
-    const round = state.room.rounds.find((item) => item.id === roundId);
-    const entry = round?.entries?.find((item) => item.actorId === selfId);
+    const entry = targetRound.entries?.find((item) => item.actorId === selfId);
     for (const [playerId, delta] of Object.entries(entry?.deltas || {})) {
       if (playerId !== selfId && delta) state.scores[playerId] = String(delta);
     }
@@ -1008,7 +1069,9 @@ function openRecord(roundId = "") {
 async function commitScores() {
   const parsed = scoreState();
   const selfId = currentPlayerId();
-  const roundId = state.editingRoundId;
+  const settlingRound = state.room?.rounds.find((round) => round.id === state.settlingRoundId);
+  const expiredSettlementId = settlingRound && !isSettling(settlingRound) ? settlingRound.id : "";
+  const roundId = state.editingRoundId || expiredSettlementId;
   if (!parsed.ok) {
     toast(parsed.hint);
     return;
@@ -1021,10 +1084,11 @@ async function commitScores() {
     state.room = data.room;
     state.dialog = "";
     state.editingRoundId = "";
+    state.settlingRoundId = "";
     state.scores = {};
     remember(data.room);
     paint();
-    toast(roundId ? "修改好了" : "记下了");
+    toast(roundId ? "修改好了" : settlingRound ? "本局已更新" : "记下了");
   });
 }
 
@@ -1037,7 +1101,7 @@ async function confirmEnd() {
     state.dialog = "";
     state.panel = null;
     paint();
-    toast("这桌结束了");
+    toast("房间已关闭");
   });
 }
 
@@ -1051,30 +1115,6 @@ async function confirmDisband() {
     state.panel = null;
     paint();
     toast("这桌已解散");
-  });
-}
-
-async function undoLatest() {
-  const latest = state.room?.rounds?.[0];
-  if (!latest) return;
-  if (!state.undoArmed) {
-    state.undoArmed = true;
-    clearTimeout(state.undoTimer);
-    state.undoTimer = setTimeout(() => {
-      state.undoArmed = false;
-      const button = document.querySelector("[data-action='undo']");
-      if (button) button.textContent = "撤销上一局";
-    }, 2500);
-    const button = document.querySelector("[data-action='undo']");
-    if (button) button.textContent = "确定撤销";
-    return;
-  }
-  state.undoArmed = false;
-  await guard(async () => {
-    const data = await request(`/api/rooms/${state.code}/rounds/${latest.id}`, { method: "DELETE" });
-    state.room = data.room;
-    paint();
-    toast("已撤销上一局");
   });
 }
 
@@ -1216,6 +1256,7 @@ function onClick(event) {
       state.dialog = state.dialog === "profile-edit" ? "profile" : "";
       state.editingProfileId = "";
       state.editingRoundId = "";
+      state.settlingRoundId = "";
       paint();
     }
     return;
@@ -1254,17 +1295,7 @@ function onClick(event) {
       item.setAttribute("aria-pressed", item === button ? "true" : "false");
     });
   } else if (action === "save-sit") saveSit();
-  else if (action === "save-edit") saveEdit();
-  else if (action === "remove") removePlayer();
-  else if (action === "edit") {
-    const player = state.room.players.find((item) => item.id === button.dataset.player);
-    if (!player) return;
-    state.panel = "edit";
-    state.editingId = player.id;
-    state.draftName = player.name;
-    state.pickedAvatar = player.avatar;
-    paint();
-  } else if (action === "open-record") openRecord();
+  else if (action === "open-record") openRecord();
   else if (action === "edit-round") openRecord(button.dataset.round || "");
   else if (action === "commit") commitScores();
   else if (action === "confirm-create") createRoom();
@@ -1300,6 +1331,7 @@ function onClick(event) {
   } else if (action === "cancel-dialog") {
     state.dialog = "";
     state.editingRoundId = "";
+    state.settlingRoundId = "";
     paint();
   } else if (action === "cancel-profile-edit") {
     state.dialog = "profile";
@@ -1318,7 +1350,7 @@ function onClick(event) {
     state.admin = null;
     state.adminError = "";
     loadAdmin();
-  } else if (action === "undo") undoLatest();
+  }
 }
 
 function onInput(event) {
@@ -1565,8 +1597,12 @@ async function boot() {
   app.addEventListener("keydown", onKeydown);
   window.addEventListener("hashchange", route);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refreshRoom();
+    if (!document.hidden) {
+      refreshRoom();
+      updateCountdowns();
+    }
   });
+  setInterval(updateCountdowns, 1000);
   route();
 }
 

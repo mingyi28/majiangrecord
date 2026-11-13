@@ -49,6 +49,12 @@ test("two phones share one running score", async () => {
     });
     assert.equal(ming.status, 201);
     assert.equal(li.status, 201);
+    const avatarLocked = await send(base, `/api/rooms/${code}/players/${ming.data.player.id}`, {
+      method: "PATCH",
+      token: ming.data.token,
+      body: { name: "改名", avatar: "cat" },
+    });
+    assert.equal(avatarLocked.status, 404);
 
     const first = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
@@ -129,13 +135,11 @@ test("two phones share one running score", async () => {
     assert.equal(restored.status, 200);
 
     const latest = restored.data.room.rounds.find((round) => round.seq === 2);
-    const undone = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
+    const undoRemoved = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
       method: "DELETE",
       token: host,
     });
-    assert.equal(undone.status, 200);
-    assert.equal(undone.data.room.rounds.length, 1);
-    assert.equal(undone.data.room.players.find((player) => player.name === "小李").total, 15);
+    assert.equal(undoRemoved.status, 404);
 
     const negative = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
@@ -191,16 +195,16 @@ test("two phones share one running score", async () => {
     const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
     assert.equal(overview.status, 200);
     assert.equal(overview.data.summary.dissolved, 1);
-    assert.equal(overview.data.summary.rounds, 1);
+    assert.equal(overview.data.summary.rounds, 2);
     assert.equal(overview.data.leaderboard[0].name, "小李");
-    assert.equal(overview.data.leaderboard[0].total, 15);
-    assert.equal(overview.data.leaderboard[0].wins, 1);
+    assert.equal(overview.data.leaderboard[0].total, 19);
+    assert.equal(overview.data.leaderboard[0].wins, 2);
     assert.equal(overview.data.leaderboard[1].name, "阿明");
     assert.equal(overview.data.leaderboard[1].total, 6);
     const room = overview.data.rooms.find((item) => item.code === code);
-    assert.equal(room.players.find((player) => player.name === "小李").total, 15);
-    assert.equal(room.rounds[0].seq, 1);
-    assert.ok(room.rounds[0].editedAt);
+    assert.equal(room.players.find((player) => player.name === "小李").total, 19);
+    assert.equal(room.rounds[0].seq, 2);
+    assert.ok(room.rounds.find((round) => round.seq === 1).editedAt);
   }, { now: () => clock });
 });
 

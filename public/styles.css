@@ -76,6 +76,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .role-button .avatar { width: 32px; height: 32px; }
 .role-button.compact { padding: 3px 8px 3px 3px; min-height: 38px; }
+.role-display { max-width: 150px; }
+.role-display > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .eyebrow {
   margin: 0;
@@ -215,6 +217,18 @@ input:focus { border-color: var(--cyan); }
 .recent b { letter-spacing: 0.12em; }
 .recent small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent time { flex: none; color: var(--muted); font-size: 10px; }
+.recent-status {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+.recent-status-active { background: #dff8ef; color: #26866a; }
+.recent-status-ended { background: #edf1f3; color: #687980; }
+.recent-status-dissolved { background: #fff0ed; color: #9d6d67; }
+.recent-status-history { background: #edf7f7; color: var(--muted); }
 
 .error {
   margin: 0;
@@ -313,6 +327,27 @@ input:focus { border-color: var(--cyan); }
   background: #fff8f6;
 }
 
+.settlement-card {
+  flex: none;
+  margin-top: 10px;
+  border: 1px solid #b9e9ec;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #ffffff, #eafafa);
+  padding: 13px;
+  box-shadow: var(--shadow);
+}
+.settlement-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.settlement-heading small { color: var(--cyan-deep); font-weight: 800; }
+.settlement-heading h2 { margin: 2px 0 0; font-size: 17px; }
+.settlement-heading > span { border-radius: 999px; background: var(--cyan-deep); padding: 4px 9px; color: white; font-size: 10px; font-weight: 800; }
+.settlement-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; max-height: 104px; margin-top: 10px; overflow: auto; }
+.settlement-scores > div { display: grid; grid-template-columns: 18px 26px minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; }
+.settlement-scores i { color: var(--muted); font-size: 10px; font-style: normal; }
+.settlement-scores .avatar { width: 26px; height: 26px; }
+.settlement-scores b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.settlement-scores strong { color: var(--muted); font-size: 12px; }
+.settlement-scores strong.up { color: var(--cyan-deep); }
+
 .players {
   list-style: none;
   margin: 0;
@@ -327,7 +362,7 @@ input:focus { border-color: var(--cyan); }
 
 .player {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   background: var(--paper);
@@ -462,7 +497,7 @@ input:focus { border-color: var(--cyan); }
 }
 
 .round b { flex: none; color: var(--cyan); }
-.round span { min-width: 0; }
+.round span { flex: 1; min-width: 0; }
 .round-button {
   width: 100%;
   border: 0;
@@ -481,6 +516,23 @@ input:focus { border-color: var(--cyan); }
   font-size: 10px;
   font-style: normal;
   font-weight: 800;
+}
+.settlement-countdown, .settled-badge {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+.settlement-countdown { background: #dcf8f3; color: #21846f; }
+.settled-badge { background: #edf1f3; color: #718087; }
+.modal-countdown {
+  display: block;
+  width: fit-content;
+  margin: 10px auto 0;
+  padding: 5px 10px;
+  font-size: 12px;
 }
 
 .panel-title { margin: 0; font-size: 18px; }

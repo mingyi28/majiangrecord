@@ -259,20 +259,11 @@ function createApp(store) {
       }
 
       const playerMatch = rest.match(/^\/players\/([^/]+)$/);
-      if (playerMatch && (req.method === "PATCH" || req.method === "DELETE")) {
+      if (playerMatch && req.method === "DELETE") {
         const playerId = playerMatch[1];
         if (!UUID.test(playerId)) throw new AppError(404, "找不到这个人");
-        const auth = await requireAuth(code, bearer(req));
-        if (req.method === "DELETE") {
-          send(res, 200, await store.removePlayer(code, playerId));
-          return;
-        }
-        const body = await readJson(req);
-        send(res, 200, await store.updatePlayer(code, playerId, {
-          name: cleanName(body.name),
-          avatar: cleanAvatar(body.avatar),
-        }));
-        void auth;
+        await requireAuth(code, bearer(req));
+        send(res, 200, await store.removePlayer(code, playerId));
         return;
       }
 
@@ -319,14 +310,6 @@ function createApp(store) {
         ));
         return;
       }
-      if (req.method === "DELETE" && roundMatch) {
-        const roundId = roundMatch[1];
-        if (!UUID.test(roundId)) throw new AppError(404, "找不到这一局");
-        await requireAuth(code, bearer(req));
-        send(res, 200, await store.deleteRound(code, roundId));
-        return;
-      }
-
       throw new AppError(404, "没有这个接口");
     }
 
