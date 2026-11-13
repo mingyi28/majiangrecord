@@ -1,13 +1,15 @@
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const crypto = require("crypto");
 const { loadAvatars } = require("./lib/avatars");
 const { AppError } = require("./lib/errors");
 const { createStore } = require("./lib/store");
-const { hashToken, hashesEqual } = require("./lib/tokens");
+const { hashesEqual } = require("./lib/tokens");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BODY = 8192;
+const ADMIN_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const TYPES = {
@@ -103,6 +105,39 @@ function cookie(req, name) {
   return "";
 }
 
+function adminPassword() {
+  return String(process.env.ADMIN_PASSWORD || "");
+}
+
+function signAdminToken() {
+  const payload = Buffer.from(JSON.stringify({
+    exp: Date.now() + ADMIN_SESSION_MS,
+    nonce: crypto.randomBytes(16).toString("base64url"),
+  })).toString("base64url");
+  const signature = crypto.createHmac("sha256", adminPassword()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifyAdminToken(token) {
+  const password = adminPassword();
+  if (!password || typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const expected = crypto.createHmac("sha256", password).update(parts[0]).digest("base64url");
+  if (!hashesEqual(parts[1], expected)) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    return Number.isFinite(payload.exp) && payload.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function adminCookie(req, value, maxAge, name = "admin_token") {
+  const secure = process.env.VERCEL || String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
+  return `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}`;
+}
+
 function normalizeCode(value) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -163,24 +198,14 @@ function createApp(store) {
     return value;
   }
 
-  async function isAdmin(token) {
-    if (!token || token.length > 200) return false;
-    if (process.env.ADMIN_TOKEN) return hashesEqual(hashToken(token), hashToken(process.env.ADMIN_TOKEN));
-    const stored = await store.adminPasswordHash();
-    if (!stored) return false;
-    return hashesEqual(hashToken(token), stored);
-  }
-
   async function adminStatus() {
     if (process.env.VERCEL && !process.env.DATABASE_URL) {
       return { needsSetup: false, unavailable: "线上还没接上数据库，历史记录存不住。请先设置 DATABASE_URL。" };
     }
-    if (process.env.VERCEL && !process.env.ADMIN_TOKEN) {
-      return { needsSetup: false, unavailable: "请在 Vercel 的环境变量里设置 ADMIN_TOKEN，再用这个口令进入管理端。" };
+    if (!adminPassword()) {
+      return { needsSetup: false, unavailable: "请设置 ADMIN_PASSWORD 环境变量，再用这个口令进入管理端。" };
     }
-    if (process.env.ADMIN_TOKEN) return { needsSetup: false };
-    const stored = await store.adminPasswordHash();
-    return { needsSetup: !stored };
+    return { needsSetup: false };
   }
 
   function cleanPassword(value) {
@@ -210,38 +235,33 @@ function createApp(store) {
       return;
     }
 
-    if (pathname === "/api/admin/setup" && req.method === "POST") {
-      if (process.env.ADMIN_TOKEN || process.env.VERCEL) throw new AppError(409, "口令由服务器设置");
-      const body = await readJson(req);
-      const password = cleanPassword(body.password);
-      await store.setAdminPassword(hashToken(password));
-      send(res, 201, { ok: true });
-      return;
-    }
-
     if (pathname === "/api/admin/login" && req.method === "POST") {
       const body = await readJson(req);
       const password = cleanPassword(body.password);
-      if (!(await isAdmin(password))) throw new AppError(401, "口令不对");
-      const secure = process.env.VERCEL ? "; Secure" : "";
+      const expected = adminPassword();
+      if (!expected) throw new AppError(503, "管理口令还没有配置");
+      if (!hashesEqual(password, expected)) throw new AppError(401, "口令不对");
       send(res, 200, { ok: true }, {
-        "set-cookie": `mj_admin=${encodeURIComponent(password)}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Strict${secure}`,
+        "set-cookie": [
+          adminCookie(req, signAdminToken(), 2592000),
+          adminCookie(req, "", 0, "mj_admin"),
+        ],
       });
       return;
     }
 
     if (pathname === "/api/admin/logout" && req.method === "POST") {
-      const secure = process.env.VERCEL ? "; Secure" : "";
       send(res, 200, { ok: true }, {
-        "set-cookie": `mj_admin=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict${secure}`,
+        "set-cookie": [
+          adminCookie(req, "", 0),
+          adminCookie(req, "", 0, "mj_admin"),
+        ],
       });
       return;
     }
 
     if (pathname === "/api/admin/overview" && req.method === "GET") {
-      const headerToken = bearer(req);
-      const cookieToken = cookie(req, "mj_admin");
-      if (!(await isAdmin(headerToken)) && !(await isAdmin(cookieToken))) throw new AppError(401, "口令不对");
+      if (!verifyAdminToken(cookie(req, "admin_token"))) throw new AppError(401, "请重新登录");
       send(res, 200, await store.adminOverview());
       return;
     }

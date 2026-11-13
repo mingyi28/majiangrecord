@@ -1,7 +1,5 @@
 const WINDS = ["东", "南", "西", "北"];
 const ROUND_WINDOW_MS = 60 * 1000;
-const ADMIN_LOGIN_MS = 30 * 24 * 60 * 60 * 1000;
-let volatileAdminToken = "";
 
 const state = {
   avatars: [],
@@ -332,43 +330,6 @@ function playerName(id) {
   return state.room?.players.find((player) => player.id === id)?.name || "有人";
 }
 
-function adminToken() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("mj.admin") || "null");
-    if (saved && typeof saved.token === "string" && Number(saved.expiresAt) > Date.now()) {
-      volatileAdminToken = saved.token;
-      return saved.token;
-    }
-    localStorage.removeItem("mj.admin");
-    const legacy = sessionStorage.getItem("mj.admin") || "";
-    if (legacy) {
-      saveAdminToken(legacy);
-      sessionStorage.removeItem("mj.admin");
-      return legacy;
-    }
-  } catch {
-    // Fall back to this page's in-memory login when storage is unavailable.
-  }
-  return volatileAdminToken;
-}
-
-function saveAdminToken(value) {
-  volatileAdminToken = value || "";
-  try {
-    if (value) {
-      localStorage.setItem("mj.admin", JSON.stringify({
-        token: value,
-        expiresAt: Date.now() + ADMIN_LOGIN_MS,
-      }));
-    } else {
-      localStorage.removeItem("mj.admin");
-    }
-    sessionStorage.removeItem("mj.admin");
-  } catch {
-    // The password still works for this page through memory.
-  }
-}
-
 function isHost() {
   return Boolean(state.session.hostToken);
 }
@@ -397,7 +358,7 @@ function request(url, options = {}) {
 }
 
 function adminRequest(url, options = {}) {
-  return send(url, options, adminToken());
+  return send(url, options, "");
 }
 
 function toast(message) {
@@ -1436,10 +1397,10 @@ function onSubmit(event) {
     openRoom(digits(input.value));
     return;
   }
-  if (event.target.id === "admin-setup" || event.target.id === "admin-login") {
+  if (event.target.id === "admin-login") {
     event.preventDefault();
     const password = event.target.password.value;
-    submitAdmin(event.target.id === "admin-setup", password);
+    submitAdmin(password);
   }
 }
 
@@ -1548,12 +1509,6 @@ function renderAdmin() {
   if (!state.admin) {
     if (state.adminMode && state.adminMode.unavailable) {
       gate = `<p class="hint">${esc(state.adminMode.unavailable)}</p>`;
-    } else if (state.adminMode && state.adminMode.needsSetup) {
-      gate = `<form id="admin-setup" class="stack">
-        <label for="admin-password">设置管理口令</label>
-        <input id="admin-password" name="password" type="password" minlength="8" maxlength="64" autocomplete="new-password" placeholder="8 到 64 位英文、数字或符号">
-        <button class="btn primary" type="submit">保存并进入</button>
-      </form>`;
     } else {
       gate = `<form id="admin-login" class="stack">
         <label for="admin-password">管理口令</label>
@@ -1594,14 +1549,12 @@ function renderAdmin() {
 }
 
 async function loadAdmin() {
-  const savedToken = adminToken();
   try {
     state.admin = await adminRequest("/api/admin/overview");
     state.adminError = "";
     paint();
   } catch (error) {
-    if (/口令/.test(error.message)) {
-      if (savedToken) saveAdminToken("");
+    if (/口令|重新登录/.test(error.message)) {
       state.admin = null;
       try {
         state.adminMode = await adminRequest("/api/admin/status");
@@ -1620,11 +1573,9 @@ async function loadAdmin() {
   }
 }
 
-async function submitAdmin(setup, password) {
+async function submitAdmin(password) {
   await guard(async () => {
-    if (setup) await adminRequest("/api/admin/setup", { method: "POST", body: JSON.stringify({ password }) });
     await adminRequest("/api/admin/login", { method: "POST", body: JSON.stringify({ password }) });
-    saveAdminToken(password);
     await loadAdmin();
   });
 }
@@ -1632,7 +1583,6 @@ async function submitAdmin(setup, password) {
 async function logoutAdmin() {
   await guard(async () => {
     await adminRequest("/api/admin/logout", { method: "POST", body: "{}" });
-    saveAdminToken("");
     state.admin = null;
     state.adminError = "";
     await loadAdmin();
@@ -1669,6 +1619,12 @@ function route() {
 async function boot() {
   const response = await fetch("/avatars.json");
   state.avatars = await response.json();
+  try {
+    localStorage.removeItem("mj.admin");
+    sessionStorage.removeItem("mj.admin");
+  } catch {
+    // Legacy browser storage may be unavailable; admin auth now uses an HttpOnly cookie.
+  }
   const app = document.querySelector("#app");
   app.addEventListener("click", onClick);
   app.addEventListener("input", onInput);

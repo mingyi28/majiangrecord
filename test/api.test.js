@@ -3,6 +3,9 @@ const assert = require("node:assert/strict");
 const { createApp } = require("../server");
 const { createMemoryStore } = require("../lib/memory-store");
 
+process.env.ADMIN_PASSWORD = "table-admin";
+delete process.env.ADMIN_TOKEN;
+
 async function withServer(fn, options) {
   const store = createMemoryStore(undefined, options);
   await store.ready();
@@ -191,8 +194,9 @@ test("two phones share one running score", async () => {
     });
     assert.equal(scoredAgain.status, 409);
 
-    await send(base, "/api/admin/setup", { method: "POST", body: { password: "table-admin" } });
-    const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
+    const adminLogin = await send(base, "/api/admin/login", { method: "POST", body: { password: "table-admin" } });
+    const adminCookie = adminLogin.headers.get("set-cookie").split(";")[0];
+    const overview = await send(base, "/api/admin/overview", { headers: { cookie: adminCookie } });
     assert.equal(overview.status, 200);
     assert.equal(overview.data.summary.dissolved, 1);
     assert.equal(overview.data.summary.rounds, 2);
@@ -345,28 +349,35 @@ test("a full table stops at eight and names are stored as text", async () => {
     const missingAdmin = await send(base, "/api/admin/overview");
     assert.equal(missingAdmin.status, 401);
     const status = await send(base, "/api/admin/status");
-    assert.equal(status.data.needsSetup, true);
-    const shortPassword = await send(base, "/api/admin/setup", { method: "POST", body: { password: "short" } });
+    assert.equal(status.data.needsSetup, false);
+    const shortPassword = await send(base, "/api/admin/login", { method: "POST", body: { password: "short" } });
     assert.equal(shortPassword.status, 400);
-    const setup = await send(base, "/api/admin/setup", { method: "POST", body: { password: "table-admin" } });
-    assert.equal(setup.status, 201);
-    const login = await send(base, "/api/admin/login", { method: "POST", body: { password: "table-admin" } });
+    const badLogin = await send(base, "/api/admin/login", { method: "POST", body: { password: "wrong-password" } });
+    assert.equal(badLogin.status, 401);
+    const login = await send(base, "/api/admin/login", {
+      method: "POST",
+      headers: { "x-forwarded-proto": "https" },
+      body: { password: "table-admin" },
+    });
     assert.equal(login.status, 200);
     const adminCookie = login.headers.get("set-cookie");
+    assert.match(adminCookie, /^admin_token=/);
     assert.match(adminCookie, /Max-Age=2592000/);
     assert.match(adminCookie, /HttpOnly/);
+    assert.match(adminCookie, /SameSite=Strict/);
+    assert.match(adminCookie, /Secure/);
     const cookieOverview = await send(base, "/api/admin/overview", {
       headers: { cookie: adminCookie.split(";")[0] },
     });
     assert.equal(cookieOverview.status, 200);
-    const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
+    const overview = cookieOverview;
     assert.equal(overview.status, 200);
     assert.equal(overview.data.summary.rooms, 1);
     assert.equal(overview.data.summary.dissolved, 1);
     assert.equal(overview.data.summary.players, 8);
     assert.equal(overview.data.rooms[0].code, code);
     assert.equal(overview.data.rooms[0].players.length, 8);
-    const wrong = await send(base, "/api/admin/overview", { token: "not-the-password" });
+    const wrong = await send(base, "/api/admin/overview", { token: "table-admin" });
     assert.equal(wrong.status, 401);
 
     const emptyFeedback = await send(base, "/api/feedback", { method: "POST", body: { message: " " } });
@@ -376,9 +387,20 @@ test("a full table stops at eight and names are stored as text", async () => {
       body: { name: "阿明", message: "希望可以导出战绩", roomCode: code },
     });
     assert.equal(feedback.status, 201);
-    const withFeedback = await send(base, "/api/admin/overview", { token: "table-admin" });
+    const withFeedback = await send(base, "/api/admin/overview", {
+      headers: { cookie: adminCookie.split(";")[0] },
+    });
     assert.equal(withFeedback.data.feedback[0].message, "希望可以导出战绩");
     assert.equal(withFeedback.data.feedback[0].roomCode, code);
+
+    process.env.ADMIN_PASSWORD = "changed-admin-password";
+    const invalidated = await send(base, "/api/admin/overview", {
+      headers: { cookie: adminCookie.split(";")[0] },
+    });
+    assert.equal(invalidated.status, 401);
+    process.env.ADMIN_PASSWORD = "table-admin";
+    const logout = await send(base, "/api/admin/logout", { method: "POST", body: {} });
+    assert.match(logout.headers.get("set-cookie"), /Max-Age=0/);
 
     const leaked = await fetch(`${base}/..%2fpackage.json`);
     assert.equal(leaked.status, 404);
