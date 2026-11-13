@@ -1,4 +1,3 @@
-const WINDS = ["东", "南", "西", "北"];
 const ROUND_WINDOW_MS = 60 * 1000;
 
 const state = {
@@ -501,7 +500,6 @@ function renderSeat() {
 function renderPlayer(player) {
   const mine = currentPlayerId() === player.id;
   const host = state.room.hostPlayerId === player.id || (!state.room.hostPlayerId && Boolean(state.session.hostToken) && mine);
-  const wind = WINDS[(Math.max(player.seat, 1) - 1) % WINDS.length];
   const leader = leaderId() === player.id ? " leader" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
   const score = `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
@@ -509,7 +507,7 @@ function renderPlayer(player) {
     <span class="avatar">${avatarSvg(player.avatar)}</span>
     <div class="who">
       <strong>${esc(player.name)}</strong>
-      <em>${wind}${host ? `<span class="host-badge">房主</span>` : ""}${mine ? `<span class="me">我</span>` : ""}</em>
+      ${host || mine ? `<em>${host ? `<span class="host-badge">房主</span>` : ""}${mine ? `<span class="me">我</span>` : ""}</em>` : ""}
     </div>
     ${score}
   </li>`;
