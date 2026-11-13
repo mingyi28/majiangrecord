@@ -370,8 +370,12 @@ input:focus { border-color: var(--cyan); }
   flex-direction: column;
   gap: 6px;
   flex: 0 1 auto;
+  max-height: 342px;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .player {
@@ -842,6 +846,7 @@ textarea:focus { border-color: var(--cyan); }
 @media (max-height: 680px) {
   h1 { font-size: 28px; }
   .home .lede { display: none; }
+  .players { max-height: 318px; }
   .player { padding: 4px 8px; }
 }
 
