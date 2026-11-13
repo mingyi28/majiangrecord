@@ -333,6 +333,7 @@ input:focus { border-color: var(--cyan); }
   flex: none;
   display: flex;
   align-items: stretch;
+  gap: 8px;
   margin-top: 10px;
 }
 
