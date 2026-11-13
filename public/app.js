@@ -452,9 +452,9 @@ function renderHome() {
       <button type="button" class="role-button" data-action="role">
         ${profile ? `<span class="avatar">${avatarSvg(profile.avatar)}</span><span>${esc(profile.name)}</span>` : "角色"}
       </button>
-      <p class="eyebrow">轻松开房间</p>
+      <p class="eyebrow">财神到</p>
       <h1>麻将记分</h1>
-      <p class="lede">五位数字进同一间，给每人直接填分数。</p>
+      <p class="lede">祝大家发大财。</p>
     </header>
     <div class="body">
       ${currentHtml}
