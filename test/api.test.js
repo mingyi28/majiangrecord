@@ -71,7 +71,7 @@ test("two phones share one running score", async () => {
     });
     assert.equal(first.status, 201);
     const afterFirst = Object.fromEntries(first.data.room.players.map((player) => [player.name, player.total]));
-    assert.deepEqual(afterFirst, { 阿明: 0, 小李: 10 });
+    assert.deepEqual(afterFirst, { 阿明: -10, 小李: 10 });
 
     const seenByLi = await send(base, `/api/rooms/${code}`);
     assert.equal(seenByLi.data.room.players.find((player) => player.name === "小李").total, 10);
@@ -86,7 +86,7 @@ test("two phones share one running score", async () => {
     });
     assert.equal(second.status, 201);
     const totals = Object.fromEntries(second.data.room.players.map((player) => [player.name, player.total]));
-    assert.deepEqual(totals, { 阿明: 6, 小李: 10 });
+    assert.deepEqual(totals, { 阿明: -4, 小李: 4 });
     assert.equal(second.data.room.rounds.length, 1);
     assert.equal(second.data.room.rounds[0].entries.length, 2);
 
@@ -115,7 +115,7 @@ test("two phones share one running score", async () => {
     assert.ok(edited.data.room.rounds.find((round) => round.id === firstRound.id).editedAt);
     assert.deepEqual(
       Object.fromEntries(edited.data.room.players.map((player) => [player.name, player.total])),
-      { 阿明: 6, 小李: 19 }
+      { 阿明: -13, 小李: 13 }
     );
 
     const cleared = await send(base, `/api/rooms/${code}/rounds/${firstRound.id}`, {
@@ -127,7 +127,7 @@ test("two phones share one running score", async () => {
       },
     });
     assert.equal(cleared.status, 200);
-    assert.equal(cleared.data.room.players.find((player) => player.name === "小李").total, 4);
+    assert.equal(cleared.data.room.players.find((player) => player.name === "小李").total, -2);
 
     const restored = await send(base, `/api/rooms/${code}/rounds/${firstRound.id}`, {
       method: "PATCH",
@@ -203,12 +203,12 @@ test("two phones share one running score", async () => {
     assert.equal(overview.data.summary.dissolved, 1);
     assert.equal(overview.data.summary.rounds, 2);
     assert.equal(overview.data.leaderboard[0].name, "小李");
-    assert.equal(overview.data.leaderboard[0].total, 19);
+    assert.equal(overview.data.leaderboard[0].total, 13);
     assert.equal(overview.data.leaderboard[0].wins, 2);
     assert.equal(overview.data.leaderboard[1].name, "阿明");
-    assert.equal(overview.data.leaderboard[1].total, 6);
+    assert.equal(overview.data.leaderboard[1].total, -13);
     const room = overview.data.rooms.find((item) => item.code === code);
-    assert.equal(room.players.find((player) => player.name === "小李").total, 19);
+    assert.equal(room.players.find((player) => player.name === "小李").total, 13);
     assert.equal(room.rounds[0].seq, 2);
     assert.ok(room.rounds.find((round) => round.seq === 1).editedAt);
   }, { now: () => clock });

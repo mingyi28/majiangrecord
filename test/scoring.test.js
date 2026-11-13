@@ -29,9 +29,10 @@ test("manual entry must balance", () => {
   assert.equal(result.deltas.a, 15);
 });
 
-test("award entry only adds points", () => {
+test("award entry balances gains against the actor", () => {
   const result = settle({ kind: "award", players, actorId: "a", deltas: { a: 0, b: 12, c: 3, d: 0 } });
-  assert.deepEqual(result.deltas, { a: 0, b: 12, c: 3, d: 0 });
+  assert.deepEqual(result.deltas, { a: -15, b: 12, c: 3, d: 0 });
+  assert.equal(Object.values(result.deltas).reduce((sum, delta) => sum + delta, 0), 0);
   assert.throws(
     () => settle({ kind: "award", players, actorId: "a", deltas: { a: 1, b: 0, c: 0, d: 0 } }),
     /不能给自己/

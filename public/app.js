@@ -396,17 +396,20 @@ function scoreState() {
   }
   let hint = "请填写分数";
   if (bad) hint = "只能输入 0 或正整数";
-  return { ok: Boolean(selfId) && !bad && (any || editing) && players.length >= 2, deltas, hint };
+  const paid = Object.entries(deltas).reduce((sum, [id, delta]) => id === selfId ? sum : sum + delta, 0);
+  return { ok: Boolean(selfId) && !bad && (any || editing) && players.length >= 2, deltas, paid, hint };
 }
 
 function updateSum() {
   const el = document.querySelector("#sum");
+  const paid = document.querySelector("#paid-total");
   const button = document.querySelector("[data-action='commit']");
   const parsed = scoreState();
   if (el) {
     el.textContent = parsed.hint;
     el.className = parsed.ok ? "sum ok" : "sum";
   }
+  if (paid) paid.textContent = formatDelta(-parsed.paid);
   if (button) button.disabled = !parsed.ok;
 }
 
@@ -669,6 +672,7 @@ function renderModal() {
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
         ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
+        <div class="paid-total"><span>本局付出的总分</span><strong id="paid-total">${formatDelta(-parsed.paid)}</strong></div>
         <div class="score-list">${otherPlayers.map((player) => {
           const displayedScore = targetRound ? Number(targetRound.deltas?.[player.id] || 0) : player.total;
           const scoreLabel = targetRound ? "本局" : "当前";

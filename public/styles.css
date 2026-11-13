@@ -503,6 +503,9 @@ input:focus { border-color: var(--cyan); }
 }
 
 .score-modal { width: min(380px, 100%); }
+.paid-total { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; border-radius: 14px; background: #fff3ef; padding: 9px 12px; }
+.paid-total span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.paid-total strong { color: #c85e65; font-size: 18px; }
 .score-list { display: flex; flex-direction: column; gap: 8px; max-height: min(48dvh, 420px); margin-top: 16px; overflow: auto; padding: 2px; }
 .score-row {
   display: grid;
