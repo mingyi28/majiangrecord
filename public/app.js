@@ -11,7 +11,11 @@ const state = {
   pickedAvatar: "",
   draftName: "",
   scores: {},
-  confirmEnd: false,
+  dialog: "",
+  admin: null,
+  adminMode: null,
+  adminError: "",
+  adminOpen: "",
   undoArmed: false,
   homeError: "",
   busy: false,
@@ -178,10 +182,30 @@ function playerName(id) {
   return state.room?.players.find((player) => player.id === id)?.name || "有人";
 }
 
-async function request(url, options = {}) {
+function adminToken() {
+  try {
+    return sessionStorage.getItem("mj.admin") || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveAdminToken(value) {
+  try {
+    if (value) sessionStorage.setItem("mj.admin", value);
+    else sessionStorage.removeItem("mj.admin");
+  } catch {
+    // The password still works for this attempt.
+  }
+}
+
+function isHost() {
+  return Boolean(state.session.hostToken);
+}
+
+async function send(url, options, token) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["content-type"] = "application/json";
-  const token = authToken();
   if (token) headers.authorization = `Bearer ${token}`;
   let response;
   try {
@@ -189,9 +213,21 @@ async function request(url, options = {}) {
   } catch {
     throw new Error("没有连上牌桌");
   }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "没有连上牌桌");
-  return data;
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (data && data.error) throw new Error(data.error);
+    if (response.status === 404) throw new Error("牌桌接口没有部署");
+    throw new Error("没有连上牌桌");
+  }
+  return data || {};
+}
+
+function request(url, options = {}) {
+  return send(url, options, authToken());
+}
+
+function adminRequest(url, options = {}) {
+  return send(url, options, adminToken());
 }
 
 function toast(message) {
@@ -281,6 +317,7 @@ function renderHome() {
       ${nickname ? `<p class="hint">称呼已记住：${esc(nickname)}，下次直接用</p>` : `<p class="hint">第一次坐下后，称呼会记在这台手机上</p>`}
       ${recentHtml ? `<div class="recents">${recentHtml}</div>` : ""}
       <p class="error">${esc(state.homeError)}</p>
+      <button type="button" class="link admin-link" data-action="admin">管理</button>
     </div>
   </div>`;
 }
@@ -291,6 +328,7 @@ function renderSeat() {
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="close-panel">返回</button>
+      ${isHost() && state.room.status !== "dissolved" ? `<button type="button" class="home-link" data-action="ask-disband">解散</button>` : ""}
       <span class="meta">${esc(state.code)}</span>
     </header>
     <div class="body">
@@ -316,7 +354,7 @@ function renderPlayer(player) {
         <input class="score-input" inputmode="text" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" aria-label="${esc(player.name)} 这一局的分数">
       </div>`
     : `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
-  const edit = state.panel !== "record" && state.room.status !== "ended" && canManage()
+  const edit = state.panel !== "record" && state.room.status === "active" && canManage()
     ? `<button type="button" class="edit" data-action="edit" data-player="${esc(player.id)}" aria-label="修改${esc(player.name)}">改</button>`
     : "";
   return `<li class="player${leader}">
@@ -351,6 +389,7 @@ function renderDock() {
       <p id="sum" class="sum">给每人填这一局的分数</p>
       <button type="button" class="btn primary" data-action="commit" disabled>记下</button>`;
   }
+  if (state.room.status === "dissolved") return `<p class="ended">这桌已经解散，记录留在管理端</p>`;
   if (state.room.status === "ended") return `<p class="ended">这桌已经结束，总分留在这里</p>`;
   const seated = [...localIds()].some((id) => state.room.players.some((player) => player.id === id));
   const parts = [];
@@ -367,11 +406,15 @@ function renderDock() {
 function renderTable() {
   if (state.panel === "sit" || state.panel === "edit") return renderSeat();
   const count = `${state.room.players.length} 人`;
-  const meta = state.room.status === "ended" ? "已结束" : count;
+  const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已结束" : count;
+  const disband = isHost() && state.room.status !== "dissolved"
+    ? `<button type="button" class="home-link" data-action="ask-disband">解散</button>`
+    : "";
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="home">首页</button>
       <button type="button" class="code-chip" data-action="copy" aria-label="复制房间号">${esc(state.code)}</button>
+      ${disband}
       <span class="meta">${meta}</span>
     </header>
     <div class="body">
@@ -383,22 +426,37 @@ function renderTable() {
 }
 
 function renderModal() {
-  if (!state.confirmEnd) return "";
-  return `<div class="modal-root">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title">
-      <h2 id="end-title">结束这桌？</h2>
-      <p>结束后不能再记分，总分会留下来。</p>
-      <div class="modal-actions">
-        <button type="button" class="btn ghost" data-action="cancel-end">再玩一会儿</button>
-        <button type="button" class="btn primary" data-action="confirm-end">结束对局</button>
+  if (state.dialog === "end") {
+    return `<div class="modal-root">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title">
+        <h2 id="end-title">结束这桌？</h2>
+        <p>结束后不能再记分，总分会留下来。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="cancel-dialog">再玩一会儿</button>
+          <button type="button" class="btn primary" data-action="confirm-end">结束对局</button>
+        </div>
       </div>
-    </div>
-  </div>`;
+    </div>`;
+  }
+  if (state.dialog === "disband") {
+    return `<div class="modal-root">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="disband-title">
+        <h2 id="disband-title">解散这桌？</h2>
+        <p>开错房间可以用这个。解散后不能再记分，记录会留在管理端。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="cancel-dialog">再想想</button>
+          <button type="button" class="btn primary" data-action="confirm-disband">解散</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return "";
 }
 
 function paint() {
   const app = document.querySelector("#app");
-  app.innerHTML = state.view === "home" ? renderHome() : `${renderTable()}${renderModal()}`;
+  const view = state.view === "admin" ? renderAdmin() : state.view === "home" ? renderHome() : `${renderTable()}${renderModal()}`;
+  app.innerHTML = view;
   if (state.panel === "record") updateSum();
 }
 
@@ -436,7 +494,7 @@ async function createRoom() {
     state.panel = "sit";
     state.draftName = loadNickname();
     state.pickedAvatar = state.avatars[0] ? state.avatars[0].id : "";
-    state.confirmEnd = false;
+    state.dialog = "";
     history.replaceState(null, "", `#/r/${data.code}`);
     remember(data.room);
     paint();
@@ -452,7 +510,7 @@ async function loadRoom(code) {
   state.session = loadSession(code);
   state.view = "table";
   state.panel = null;
-  state.confirmEnd = false;
+  state.dialog = "";
   try {
     const data = await request(`/api/rooms/${code}`);
     state.room = data.room;
@@ -478,13 +536,13 @@ async function refreshRoom() {
     state.room = data.room;
     const nextIds = data.room.players.map((player) => player.id).join();
     const nextRound = data.room.rounds[0]?.id || "";
-    if (data.room.status === "ended" && state.panel === "record") {
+    if ((data.room.status === "ended" || data.room.status === "dissolved") && state.panel === "record") {
       state.panel = null;
       state.scores = {};
       paint();
       return;
     }
-    if (state.panel === "sit" || state.panel === "edit" || state.confirmEnd) return;
+    if (state.panel === "sit" || state.panel === "edit" || state.dialog) return;
     if (state.panel === "record") {
       if (previousIds === nextIds && previousStatus === data.room.status) return;
       for (const player of data.room.players) {
@@ -576,7 +634,7 @@ function openRecord() {
     return;
   }
   state.panel = "record";
-  state.confirmEnd = false;
+  state.dialog = "";
   state.scores = {};
   for (const player of state.room.players) state.scores[player.id] = "";
   paint();
@@ -608,10 +666,21 @@ async function confirmEnd() {
   await guard(async () => {
     const data = await request(`/api/rooms/${state.code}/end`, { method: "POST", body: "{}" });
     state.room = data.room;
-    state.confirmEnd = false;
+    state.dialog = "";
     state.panel = null;
     paint();
     toast("这桌结束了");
+  });
+}
+
+async function confirmDisband() {
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}`, { method: "DELETE" });
+    state.room = data.room;
+    state.dialog = "";
+    state.panel = null;
+    paint();
+    toast("这桌已解散");
   });
 }
 
@@ -652,7 +721,7 @@ function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
-      state.confirmEnd = false;
+      state.dialog = "";
       paint();
     }
     return;
@@ -664,7 +733,7 @@ function onClick(event) {
     stopPoll();
     state.view = "home";
     state.panel = null;
-    state.confirmEnd = false;
+    state.dialog = "";
     location.hash = "#/";
     paint();
   } else if (action === "copy") copyCode();
@@ -706,13 +775,26 @@ function onClick(event) {
     updateSum();
   } else if (action === "commit") commitScores();
   else if (action === "ask-end") {
-    state.confirmEnd = true;
+    state.dialog = "end";
     paint();
-  } else if (action === "cancel-end") {
-    state.confirmEnd = false;
+  } else if (action === "cancel-dialog") {
+    state.dialog = "";
     paint();
   } else if (action === "confirm-end") confirmEnd();
-  else if (action === "undo") undoLatest();
+  else if (action === "confirm-disband") confirmDisband();
+  else if (action === "ask-disband") {
+    state.dialog = "disband";
+    paint();
+  } else if (action === "admin") location.hash = "#/admin";
+  else if (action === "toggle-room") {
+    state.adminOpen = state.adminOpen === button.dataset.code ? "" : button.dataset.code || "";
+    paint();
+  } else if (action === "admin-out") {
+    saveAdminToken("");
+    state.admin = null;
+    state.adminError = "";
+    loadAdmin();
+  } else if (action === "undo") undoLatest();
 }
 
 function onInput(event) {
@@ -735,10 +817,17 @@ function onInput(event) {
 }
 
 function onSubmit(event) {
-  if (event.target.id !== "join-form") return;
-  event.preventDefault();
-  const input = event.target.querySelector("input");
-  openRoom(digits(input.value));
+  if (event.target.id === "join-form") {
+    event.preventDefault();
+    const input = event.target.querySelector("input");
+    openRoom(digits(input.value));
+    return;
+  }
+  if (event.target.id === "admin-setup" || event.target.id === "admin-login") {
+    event.preventDefault();
+    const password = event.target.password.value;
+    submitAdmin(event.target.id === "admin-setup", password);
+  }
 }
 
 function onKeydown(event) {
@@ -753,13 +842,138 @@ function onKeydown(event) {
   }
 }
 
+function statusLabel(status) {
+  if (status === "dissolved") return "已解散";
+  if (status === "ended") return "已结束";
+  return "进行中";
+}
+
+function formatWhen(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function roundLine(room, round) {
+  const names = Object.fromEntries(room.players.map((player) => [player.id, player.name]));
+  const parts = Object.entries(round.deltas || {})
+    .filter(([, delta]) => delta)
+    .map(([id, delta]) => `${names[id] || "有人"} ${formatDelta(delta)}`);
+  return parts.join(" · ") || "分数没有变化";
+}
+
+function renderAdmin() {
+  const summary = state.admin && state.admin.summary;
+  const cards = summary
+    ? `<div class="stats">
+        ${[
+          ["房间", summary.rooms],
+          ["进行中", summary.active],
+          ["已结束", summary.ended],
+          ["已解散", summary.dissolved],
+          ["人次", summary.players],
+          ["对局", summary.rounds],
+        ].map(([label, value]) => `<div class="stat"><b>${esc(value)}</b><span>${label}</span></div>`).join("")}
+      </div>`
+    : "";
+  const rooms = (state.admin && state.admin.rooms) || [];
+  const list = rooms.length
+    ? rooms.map((room) => {
+        const open = state.adminOpen === room.code;
+        const people = room.players.map((player) => `<li><span>${esc(player.name)}</span><b class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</b></li>`).join("");
+        const rounds = open
+          ? room.rounds.map((round) => `<p class="round"><b>第${round.seq}局</b><span>${esc(roundLine(room, round))}</span></p>`).join("")
+          : "";
+        return `<article class="room-card">
+          <header>
+            <b>${esc(room.code)}</b>
+            <span>${statusLabel(room.status)}</span>
+            <small>${esc(formatWhen(room.createdAt))}</small>
+          </header>
+          <ul>${people || "<li><span>还没有人坐下</span></li>"}</ul>
+          <button type="button" class="link" data-action="toggle-room" data-code="${esc(room.code)}">${room.roundCount} 局${open ? "，收起" : ""}</button>
+          ${rounds}
+        </article>`;
+      }).join("")
+    : state.admin ? `<p class="hint">还没有牌桌记录。</p>` : "";
+  let gate = "";
+  if (!state.admin) {
+    if (state.adminMode && state.adminMode.unavailable) {
+      gate = `<p class="hint">${esc(state.adminMode.unavailable)}</p>`;
+    } else if (state.adminMode && state.adminMode.needsSetup) {
+      gate = `<form id="admin-setup" class="stack">
+        <label for="admin-password">设置管理口令</label>
+        <input id="admin-password" name="password" type="password" minlength="8" maxlength="64" autocomplete="new-password" placeholder="8 到 64 位英文、数字或符号">
+        <button class="btn primary" type="submit">保存并进入</button>
+      </form>`;
+    } else {
+      gate = `<form id="admin-login" class="stack">
+        <label for="admin-password">管理口令</label>
+        <input id="admin-password" name="password" type="password" maxlength="64" autocomplete="current-password">
+        <button class="btn primary" type="submit">进入</button>
+      </form>`;
+    }
+  }
+  return `<div class="screen admin">
+    <header class="top">
+      <button type="button" class="home-link" data-action="home">返回</button>
+      <strong class="panel-title">管理</strong>
+      ${state.admin ? `<button type="button" class="link" data-action="admin-out">退出</button>` : ""}
+    </header>
+    <div class="body">
+      <p class="lede">每桌的分数和汇总。</p>
+      ${cards}
+      ${list}
+      ${gate}
+      <p class="error">${esc(state.adminError)}</p>
+    </div>
+  </div>`;
+}
+
+async function loadAdmin() {
+  try {
+    if (!adminToken()) {
+      state.admin = null;
+      state.adminMode = await adminRequest("/api/admin/status");
+      state.adminError = "";
+      paint();
+      return;
+    }
+    state.admin = await adminRequest("/api/admin/overview");
+    state.adminError = "";
+    paint();
+  } catch (error) {
+    if (/口令/.test(error.message)) saveAdminToken("");
+    state.admin = null;
+    state.adminError = error.message;
+    if (!state.adminMode) state.adminMode = { needsSetup: false };
+    paint();
+  }
+}
+
+async function submitAdmin(setup, password) {
+  await guard(async () => {
+    if (setup) await adminRequest("/api/admin/setup", { method: "POST", body: JSON.stringify({ password }) });
+    saveAdminToken(password);
+    await loadAdmin();
+  });
+}
+
 function route() {
+  if (location.hash === "#/admin") {
+    stopPoll();
+    state.view = "admin";
+    state.dialog = "";
+    paint();
+    loadAdmin();
+    return;
+  }
   const match = location.hash.match(/^#\/r\/(\d{5})$/);
   if (!match) {
     stopPoll();
     state.view = "home";
     state.panel = null;
-    state.confirmEnd = false;
+    state.dialog = "";
     paint();
     return;
   }

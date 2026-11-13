@@ -3,7 +3,7 @@
   "short_name": "麻将记分",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fff6f8",
-  "theme_color": "#ff8fab",
+  "background_color": "#f4fffd",
+  "theme_color": "#12b7c4",
   "lang": "zh-CN"
 }

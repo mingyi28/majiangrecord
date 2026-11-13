@@ -4,6 +4,7 @@ const path = require("path");
 const { loadAvatars } = require("./lib/avatars");
 const { AppError } = require("./lib/errors");
 const { createStore } = require("./lib/store");
+const { hashToken, hashesEqual } = require("./lib/tokens");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BODY = 8192;
@@ -40,6 +41,9 @@ function send(res, status, body) {
 }
 
 function readJson(req) {
+  if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body) && !Array.isArray(req.body)) {
+    return Promise.resolve(req.body);
+  }
   return new Promise((resolve, reject) => {
     const type = String(req.headers["content-type"] || "");
     if (!type.includes("application/json")) {
@@ -80,7 +84,7 @@ function readJson(req) {
 
 function bearer(req) {
   const header = String(req.headers.authorization || "");
-  const match = header.match(/^Bearer\s+([A-Za-z0-9_-]{40,128})$/);
+  const match = header.match(/^Bearer\s+([\x21-\x7e]{8,200})$/);
   return match ? match[1] : "";
 }
 
@@ -127,6 +131,32 @@ function createApp(store) {
     return value;
   }
 
+  async function isAdmin(token) {
+    if (!token || token.length > 200) return false;
+    if (process.env.ADMIN_TOKEN) return hashesEqual(hashToken(token), hashToken(process.env.ADMIN_TOKEN));
+    const stored = await store.adminPasswordHash();
+    if (!stored) return false;
+    return hashesEqual(hashToken(token), stored);
+  }
+
+  async function adminStatus() {
+    if (process.env.VERCEL && !process.env.DATABASE_URL) {
+      return { needsSetup: false, unavailable: "线上还没接上数据库，历史记录存不住。请先设置 DATABASE_URL。" };
+    }
+    if (process.env.VERCEL && !process.env.ADMIN_TOKEN) {
+      return { needsSetup: false, unavailable: "请在 Vercel 的环境变量里设置 ADMIN_TOKEN，再用这个口令进入管理端。" };
+    }
+    if (process.env.ADMIN_TOKEN) return { needsSetup: false };
+    const stored = await store.adminPasswordHash();
+    return { needsSetup: !stored };
+  }
+
+  function cleanPassword(value) {
+    const password = String(value ?? "");
+    if (!/^[\x21-\x7e]{8,64}$/.test(password)) throw new AppError(400, "口令用 8 到 64 位英文、数字或符号");
+    return password;
+  }
+
   async function requireAuth(code, token) {
     const auth = await store.authenticate(code, token);
     if (auth) return auth;
@@ -140,6 +170,26 @@ function createApp(store) {
 
     if (req.method === "GET" && pathname === "/api/health") {
       send(res, 200, { ok: true });
+      return;
+    }
+
+    if (pathname === "/api/admin/status" && req.method === "GET") {
+      send(res, 200, await adminStatus());
+      return;
+    }
+
+    if (pathname === "/api/admin/setup" && req.method === "POST") {
+      if (process.env.ADMIN_TOKEN || process.env.VERCEL) throw new AppError(409, "口令由服务器设置");
+      const body = await readJson(req);
+      const password = cleanPassword(body.password);
+      await store.setAdminPassword(hashToken(password));
+      send(res, 201, { ok: true });
+      return;
+    }
+
+    if (pathname === "/api/admin/overview" && req.method === "GET") {
+      if (!(await isAdmin(bearer(req)))) throw new AppError(401, "口令不对");
+      send(res, 200, await store.adminOverview());
       return;
     }
 
@@ -158,6 +208,13 @@ function createApp(store) {
 
       if (req.method === "GET" && rest === "") {
         send(res, 200, { room: await store.getRoom(code) });
+        return;
+      }
+
+      if (req.method === "DELETE" && rest === "") {
+        const auth = await requireAuth(code, bearer(req));
+        if (auth.role !== "host") throw new AppError(403, "只有开桌的人可以解散");
+        send(res, 200, await store.dissolveRoom(code));
         return;
       }
 

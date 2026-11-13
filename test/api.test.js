@@ -97,6 +97,30 @@ test("two phones share one running score", async () => {
       },
     });
     assert.equal(blocked.status, 409);
+
+    const byPlayer = await send(base, `/api/rooms/${code}`, { method: "DELETE", token: ming.data.token });
+    assert.equal(byPlayer.status, 403);
+    const dissolved = await send(base, `/api/rooms/${code}`, { method: "DELETE", token: host });
+    assert.equal(dissolved.status, 200);
+    assert.equal(dissolved.data.room.status, "dissolved");
+    const scoredAgain = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: host,
+      body: {
+        kind: "manual",
+        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: -1 },
+      },
+    });
+    assert.equal(scoredAgain.status, 409);
+
+    await send(base, "/api/admin/setup", { method: "POST", body: { password: "table-admin" } });
+    const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
+    assert.equal(overview.status, 200);
+    assert.equal(overview.data.summary.dissolved, 1);
+    assert.equal(overview.data.summary.rounds, 1);
+    const room = overview.data.rooms.find((item) => item.code === code);
+    assert.equal(room.players.find((player) => player.name === "阿明").total, 10);
+    assert.equal(room.rounds[0].seq, 1);
   });
 });
 
@@ -178,6 +202,37 @@ test("a full table stops at eight and names are stored as text", async () => {
     const html = await fetch(`${base}/`).then((response) => response.text());
     assert.match(html, /麻将记分/);
     assert.doesNotMatch(html, /<script(?! src="\/app\.js")/);
+
+    const ended = await send(base, `/api/rooms/${code}/end`, { method: "POST", token: created.data.hostToken, body: {} });
+    assert.equal(ended.status, 200);
+    const guest = await send(base, `/api/rooms/${code}`, { method: "DELETE", token: "nope" });
+    assert.equal(guest.status, 401);
+    const dissolved = await send(base, `/api/rooms/${code}`, { method: "DELETE", token: created.data.hostToken });
+    assert.equal(dissolved.status, 200);
+    assert.equal(dissolved.data.room.status, "dissolved");
+    const again = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "后来的", avatar: "bunny" },
+    });
+    assert.equal(again.status, 409);
+
+    const missingAdmin = await send(base, "/api/admin/overview");
+    assert.equal(missingAdmin.status, 401);
+    const status = await send(base, "/api/admin/status");
+    assert.equal(status.data.needsSetup, true);
+    const shortPassword = await send(base, "/api/admin/setup", { method: "POST", body: { password: "short" } });
+    assert.equal(shortPassword.status, 400);
+    const setup = await send(base, "/api/admin/setup", { method: "POST", body: { password: "table-admin" } });
+    assert.equal(setup.status, 201);
+    const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
+    assert.equal(overview.status, 200);
+    assert.equal(overview.data.summary.rooms, 1);
+    assert.equal(overview.data.summary.dissolved, 1);
+    assert.equal(overview.data.summary.players, 8);
+    assert.equal(overview.data.rooms[0].code, code);
+    assert.equal(overview.data.rooms[0].players.length, 8);
+    const wrong = await send(base, "/api/admin/overview", { token: "not-the-password" });
+    assert.equal(wrong.status, 401);
 
     const leaked = await fetch(`${base}/..%2fpackage.json`);
     assert.equal(leaked.status, 404);
