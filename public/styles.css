@@ -18,13 +18,30 @@ html, body {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   margin: 0;
   color: var(--ink);
+  background: var(--bg);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -40px;
+  z-index: 0;
+  pointer-events: none;
   background:
     radial-gradient(circle at 100% -10%, #d7f7f6 0 120px, transparent 122px),
     radial-gradient(circle at -8% 18%, #e7fbfa 0 90px, transparent 92px),
-    radial-gradient(circle at 92% 88%, #dff6fb 0 80px, transparent 82px),
-    var(--bg);
+    radial-gradient(circle at 92% 88%, #dff6fb 0 80px, transparent 82px);
+  animation: background-circles 14s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes background-circles {
+  from { transform: translate3d(-8px, 6px, 0) scale(1); }
+  to { transform: translate3d(14px, -12px, 0) scale(1.04); }
 }
 
 button, input { font: inherit; color: inherit; }
@@ -36,6 +53,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 
 .stage {
+  position: relative;
+  z-index: 1;
   height: 100%;
   overflow: hidden;
 }
@@ -923,5 +942,6 @@ textarea:focus { border-color: var(--cyan); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
   .modal { animation: none; }
 }
