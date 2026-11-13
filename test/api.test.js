@@ -34,47 +34,49 @@ test("two phones share one running score", async () => {
     const created = await send(base, "/api/rooms", { method: "POST", body: {} });
     assert.equal(created.status, 201);
     const code = created.data.code;
-    assert.match(code, /^[A-Z0-9]{8}$/);
+    assert.match(code, /^\d{5}$/);
+    assert.equal(created.data.room.status, "active");
 
     const host = created.data.hostToken;
     const ming = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "阿明", avatar: "tile-zhong" },
+      body: { name: "阿明", avatar: "bunny" },
     });
     const li = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "小李", avatar: "face-bo" },
+      body: { name: "小李", avatar: "cat" },
     });
     assert.equal(ming.status, 201);
     assert.equal(li.status, 201);
 
-    const zimo = await send(base, `/api/rooms/${code}/rounds`, {
+    const first = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
       token: ming.data.token,
-      body: { kind: "zimo", winnerId: ming.data.player.id, points: 10 },
+      body: {
+        kind: "manual",
+        deltas: { [ming.data.player.id]: 10, [li.data.player.id]: -10 },
+      },
     });
-    assert.equal(zimo.status, 201);
-    const afterZimo = Object.fromEntries(zimo.data.room.players.map((player) => [player.name, player.total]));
-    assert.deepEqual(afterZimo, { 阿明: 10, 小李: -10 });
+    assert.equal(first.status, 201);
+    const afterFirst = Object.fromEntries(first.data.room.players.map((player) => [player.name, player.total]));
+    assert.deepEqual(afterFirst, { 阿明: 10, 小李: -10 });
 
     const seenByLi = await send(base, `/api/rooms/${code}`);
     assert.equal(seenByLi.data.room.players.find((player) => player.name === "阿明").total, 10);
 
-    const dianpao = await send(base, `/api/rooms/${code}/rounds`, {
+    const second = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
       token: li.data.token,
       body: {
-        kind: "dianpao",
-        winnerId: li.data.player.id,
-        payerId: ming.data.player.id,
-        points: 6,
+        kind: "manual",
+        deltas: { [ming.data.player.id]: -6, [li.data.player.id]: 6 },
       },
     });
-    assert.equal(dianpao.status, 201);
-    const totals = Object.fromEntries(dianpao.data.room.players.map((player) => [player.name, player.total]));
+    assert.equal(second.status, 201);
+    const totals = Object.fromEntries(second.data.room.players.map((player) => [player.name, player.total]));
     assert.deepEqual(totals, { 阿明: 4, 小李: -4 });
 
-    const latest = dianpao.data.room.rounds[0];
+    const latest = second.data.room.rounds[0];
     const undone = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
       method: "DELETE",
       token: host,
@@ -82,6 +84,19 @@ test("two phones share one running score", async () => {
     assert.equal(undone.status, 200);
     assert.equal(undone.data.room.rounds.length, 1);
     assert.equal(undone.data.room.players.find((player) => player.name === "阿明").total, 10);
+
+    const ended = await send(base, `/api/rooms/${code}/end`, { method: "POST", token: host, body: {} });
+    assert.equal(ended.status, 200);
+    assert.equal(ended.data.room.status, "ended");
+    const blocked = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: host,
+      body: {
+        kind: "manual",
+        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: -1 },
+      },
+    });
+    assert.equal(blocked.status, 409);
   });
 });
 
@@ -92,33 +107,42 @@ test("scoring requires a seat token from this room", async () => {
     const code = first.data.code;
     const ming = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "阿明", avatar: "tile-fa" },
+      body: { name: "阿明", avatar: "fox" },
     });
     await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "小李", avatar: "tile-bai" },
+      body: { name: "小李", avatar: "panda" },
     });
     const outsider = await send(base, `/api/rooms/${second.data.code}/players`, {
       method: "POST",
-      body: { name: "外人", avatar: "tile-dong" },
+      body: { name: "外人", avatar: "chick" },
     });
 
     const missing = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
-      body: { kind: "zimo", winnerId: ming.data.player.id, points: 2 },
+      body: {
+        kind: "manual",
+        deltas: { [ming.data.player.id]: 2, placeholder: -2 },
+      },
     });
     assert.equal(missing.status, 401);
 
     const foreign = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
       token: outsider.data.token,
-      body: { kind: "zimo", winnerId: ming.data.player.id, points: 2 },
+      body: {
+        kind: "manual",
+        deltas: { [ming.data.player.id]: 2, placeholder: -2 },
+      },
     });
     assert.equal(foreign.status, 401);
 
+    const endMissing = await send(base, `/api/rooms/${code}/end`, { method: "POST", body: {} });
+    assert.equal(endMissing.status, 401);
+
     const badName = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "   ", avatar: "tile-zhong" },
+      body: { name: "   ", avatar: "bunny" },
     });
     assert.equal(badName.status, 400);
 
@@ -137,14 +161,14 @@ test("a full table stops at eight and names are stored as text", async () => {
     for (let i = 0; i < 8; i += 1) {
       const joined = await send(base, `/api/rooms/${code}/players`, {
         method: "POST",
-        body: { name: `玩家${i}<b>`, avatar: "face-an" },
+        body: { name: `玩家${i}<b>`, avatar: "chick" },
       });
       assert.equal(joined.status, 201);
       assert.equal(joined.data.player.name, `玩家${i}<b>`);
     }
     const overflow = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "第九人", avatar: "face-e" },
+      body: { name: "第九人", avatar: "sprout" },
     });
     assert.equal(overflow.status, 409);
 

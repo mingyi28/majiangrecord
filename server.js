@@ -85,9 +85,7 @@ function bearer(req) {
 }
 
 function normalizeCode(value) {
-  return String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+  return String(value || "").replace(/\D/g, "");
 }
 
 function cleanName(value) {
@@ -155,7 +153,7 @@ function createApp(store) {
       }
 
       const code = normalizeCode(roomMatch[1]);
-      if (code.length !== 8) throw new AppError(404, "找不到这桌，核对一下房间号");
+      if (!/^\d{5}$/.test(code)) throw new AppError(404, "找不到这桌，核对一下房间号");
       const rest = roomMatch[2] || "";
 
       if (req.method === "GET" && rest === "") {
@@ -188,6 +186,13 @@ function createApp(store) {
           avatar: cleanAvatar(body.avatar),
         }));
         void auth;
+        return;
+      }
+
+      if (req.method === "POST" && rest === "/end") {
+        await requireAuth(code, bearer(req));
+        await readJson(req);
+        send(res, 200, await store.endRoom(code));
         return;
       }
 

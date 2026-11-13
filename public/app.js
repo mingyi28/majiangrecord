@@ -1,5 +1,4 @@
 const WINDS = ["东", "南", "西", "北"];
-const QUICK_POINTS = [1, 2, 5, 10, 20, 50];
 
 const state = {
   avatars: [],
@@ -7,27 +6,19 @@ const state = {
   code: "",
   room: null,
   session: { hostToken: null, players: {} },
-  sheet: null,
+  panel: null,
   editingId: "",
   pickedAvatar: "",
   draftName: "",
-  record: emptyRecord(),
-  recordPlayerKey: "",
-  error: "",
-  homeError: "",
-  failed: "",
-  busy: false,
-  offline: false,
+  scores: {},
+  confirmEnd: false,
   undoArmed: false,
-  pendingRemove: "",
+  homeError: "",
+  busy: false,
   toastTimer: 0,
   pollTimer: 0,
   undoTimer: 0,
 };
-
-function emptyRecord() {
-  return { kind: "zimo", winnerId: "", payerId: "", points: "", deltas: {}, note: "" };
-}
 
 function esc(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({
@@ -40,69 +31,70 @@ function esc(value) {
 }
 
 function safeColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#1c1712";
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#fff7fb";
+}
+
+function earsMarkup(kind, accent, face) {
+  switch (kind) {
+    case "bunny":
+      return `<ellipse cx="26" cy="16" rx="6" ry="13" fill="${accent}"/><ellipse cx="54" cy="16" rx="6" ry="13" fill="${accent}"/><ellipse cx="26" cy="16" rx="3" ry="8" fill="${face}"/><ellipse cx="54" cy="16" rx="3" ry="8" fill="${face}"/>`;
+    case "cat":
+      return `<path d="M24 34 L30 12 L40 30 Z" fill="${accent}"/><path d="M56 34 L50 12 L40 30 Z" fill="${accent}"/>`;
+    case "bear":
+      return `<circle cx="22" cy="24" r="9" fill="${accent}"/><circle cx="58" cy="24" r="9" fill="${accent}"/>`;
+    case "chick":
+      return `<ellipse cx="24" cy="20" rx="8" ry="5" fill="${accent}" transform="rotate(-24 24 20)"/><ellipse cx="56" cy="20" rx="8" ry="5" fill="${accent}" transform="rotate(24 56 20)"/>`;
+    case "puppy":
+      return `<ellipse cx="18" cy="30" rx="8" ry="12" fill="${accent}" transform="rotate(-20 18 30)"/><ellipse cx="62" cy="30" rx="8" ry="12" fill="${accent}" transform="rotate(20 62 30)"/>`;
+    case "fox":
+      return `<path d="M16 36 L28 10 L42 30 Z" fill="${accent}"/><path d="M64 36 L52 10 L38 30 Z" fill="${accent}"/>`;
+    case "panda":
+      return `<circle cx="22" cy="26" r="10" fill="${accent}"/><circle cx="58" cy="26" r="10" fill="${accent}"/><ellipse cx="32" cy="44" rx="7" ry="8" fill="${accent}"/><ellipse cx="48" cy="44" rx="7" ry="8" fill="${accent}"/>`;
+    case "frog":
+      return `<circle cx="26" cy="20" r="10" fill="${accent}"/><circle cx="54" cy="20" r="10" fill="${accent}"/><circle cx="26" cy="20" r="4.5" fill="#3d4458"/><circle cx="54" cy="20" r="4.5" fill="#3d4458"/><circle cx="27.4" cy="18.8" r="1.4" fill="#fff"/><circle cx="55.4" cy="18.8" r="1.4" fill="#fff"/>`;
+    case "pigtail":
+      return `<circle cx="14" cy="42" r="8" fill="${accent}"/><circle cx="66" cy="42" r="8" fill="${accent}"/><path d="M28 32c2-12 6-16 12-16s10 4 12 16c-4-7-8-9-12-9s-8 2-12 9z" fill="${accent}"/>`;
+    case "sprout":
+      return `<path d="M40 28c-10-2-16-12-14-18 9 1 16 9 14 18z" fill="${accent}"/><path d="M40 28c10-2 16-12 14-18-9 1-16 9-14 18z" fill="#b6f0c8"/><rect x="38.4" y="26" width="3.2" height="8" rx="1.6" fill="#5cbf86"/>`;
+    case "bow":
+      return `<path d="M40 22c-8-12-22-8-20 2 1 6 12 8 20 1 8 7 19 5 20-1 2-10-12-14-20-2z" fill="${accent}"/>`;
+    case "cap":
+      return `<path d="M20 36c2-16 12-20 20-20s18 4 20 20H20z" fill="${accent}"/><path d="M14 36h52v5c0 2-6 4-12 4H26c-6 0-12-2-12-4z" fill="${accent}"/>`;
+    default:
+      return "";
+  }
 }
 
 function avatarSvg(id) {
   const avatar = state.avatars.find((item) => item.id === id);
-  if (!avatar) return "";
-  if (avatar.kind === "tile" && /^[\u4e00-\u9fff]$/.test(avatar.glyph)) {
-    const ink = safeColor(avatar.ink);
-    const paper = safeColor(avatar.paper);
-    return `<svg viewBox="0 0 80 80" aria-hidden="true"><rect x="10" y="8" width="60" height="64" rx="8" fill="${paper}" stroke="#1c1712" stroke-width="3"/><rect x="16" y="14" width="48" height="52" rx="4" fill="none" stroke="${ink}" stroke-width="1.5" opacity=".45"/><text x="40" y="52" text-anchor="middle" font-size="30" font-family="Palatino, Songti SC, serif" fill="${ink}">${avatar.glyph}</text></svg>`;
-  }
-  if (avatar.kind !== "face") return "";
-  const skin = safeColor(avatar.skin);
-  const hair = safeColor(avatar.hair);
-  const cloth = safeColor(avatar.cloth);
-  const bangs = {
-    short: `<path d="M24 36c2-12 10-18 16-18s14 6 16 18c-4-6-10-8-16-8s-12 2-16 8z" fill="${hair}"/>`,
-    bob: `<path d="M23 34c1-12 9-18 17-18s16 6 17 18c-1 8-3 14-6 16-2-7-6-10-11-10s-9 3-11 10c-3-2-5-8-6-16z" fill="${hair}"/>`,
-    bun: `<circle cx="40" cy="16" r="6" fill="${hair}"/><path d="M25 36c2-11 9-16 15-16s13 5 15 16c-4-5-9-7-15-7s-11 2-15 7z" fill="${hair}"/>`,
-    cap: `<path d="M18 38h44c-2-12-12-18-22-18S20 26 18 38z" fill="${hair}"/><path d="M16 38h48v4H16z" fill="${cloth}"/>`,
-    long: `<path d="M26 34c2-10 8-14 14-14s12 4 14 14c-4-4-8-6-14-6s-10 2-14 6z" fill="${hair}"/>`,
-    buzz: `<path d="M26 35c2-9 8-13 14-13s12 4 14 13c-4-3-8-5-14-5s-10 2-14 5z" fill="${hair}"/>`,
-    side: `<path d="M24 38c2-14 10-20 20-18 6 1 10 5 12 10-8-1-12 2-16 7-3-6-8-8-16 1z" fill="${hair}"/>`,
-    band: `<path d="M25 35c2-11 9-15 15-15s13 4 15 15c-4-5-9-7-15-7s-11 2-15 7z" fill="${hair}"/><rect x="23" y="33" width="34" height="5" rx="2" fill="${cloth}"/>`,
-  }[avatar.style] || "";
-  const behind = avatar.style === "long"
-    ? `<path d="M22 48c1 14 6 24 10 26 1-12 4-18 8-18s7 6 8 18c4-2 9-12 10-26-2-10-8-16-18-16s-16 6-18 16z" fill="${hair}"/>`
-    : "";
-  const extra = {
-    glasses: `<g fill="none" stroke="${hair}" stroke-width="1.6"><circle cx="34" cy="40" r="4.2"/><circle cx="46" cy="40" r="4.2"/><path d="M38.2 40h3.6"/></g>`,
-    blush: `<ellipse cx="31" cy="46" rx="3" ry="1.6" fill="#e29a8d"/><ellipse cx="49" cy="46" rx="3" ry="1.6" fill="#e29a8d"/>`,
-    mole: `<circle cx="49" cy="46" r="1" fill="#6a4a38"/>`,
-  }[avatar.extra] || "";
-  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="40" fill="${cloth}"/>${behind}<circle cx="40" cy="42" r="16" fill="${skin}"/><circle cx="24" cy="44" r="3" fill="${skin}"/><circle cx="56" cy="44" r="3" fill="${skin}"/>${bangs}<circle cx="34.5" cy="41" r="1.5" fill="#241c16"/><circle cx="46.5" cy="41" r="1.5" fill="#241c16"/><path d="M36 48c1.4 2 6.6 2 8 0" fill="none" stroke="#8a5344" stroke-width="1.4" stroke-linecap="round"/>${extra}</svg>`;
+  if (!avatar || avatar.kind !== "cute" || !/^[a-z0-9-]{1,32}$/.test(avatar.ears || "")) return "";
+  const face = safeColor(avatar.face);
+  const accent = safeColor(avatar.accent);
+  const cheek = safeColor(avatar.cheek);
+  const bg = safeColor(avatar.bg);
+  const mouth = avatar.beak
+    ? `<path d="M36 47 h8 l-4 5 z" fill="#ffb703"/>`
+    : `<path d="M34 49c2.2 2.6 9.8 2.6 12 0" fill="none" stroke="#e07a8a" stroke-width="1.7" stroke-linecap="round"/>`;
+  const eyes = avatar.beak
+    ? `<ellipse cx="32" cy="43" rx="2.1" ry="2.5" fill="#3d4458"/><ellipse cx="48" cy="43" rx="2.1" ry="2.5" fill="#3d4458"/>`
+    : `<ellipse cx="32" cy="43" rx="3.3" ry="3.8" fill="#3d4458"/><ellipse cx="48" cy="43" rx="3.3" ry="3.8" fill="#3d4458"/><circle cx="33.2" cy="41.6" r="1.15" fill="#fff"/><circle cx="49.2" cy="41.6" r="1.15" fill="#fff"/>`;
+  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="40" fill="${bg}"/><circle cx="40" cy="46" r="18" fill="${face}"/>${earsMarkup(avatar.ears, accent, face)}<ellipse cx="28" cy="52" rx="4.2" ry="2.3" fill="${cheek}"/><ellipse cx="52" cy="52" rx="4.2" ry="2.3" fill="${cheek}"/>${eyes}${mouth}</svg>`;
 }
 
-function avatarButton(id, { pressed, action, extra = "" }) {
+function avatarButton(id) {
   const avatar = state.avatars.find((item) => item.id === id);
   const label = avatar ? avatar.label : "头像";
-  return `<button type="button" class="pick" data-action="${esc(action)}" data-avatar="${esc(id)}" ${extra} aria-pressed="${pressed ? "true" : "false"}" aria-label="${esc(label)}"><span class="avatar">${avatarSvg(id)}</span><small>${esc(label)}</small></button>`;
+  const pressed = state.pickedAvatar === id;
+  return `<button type="button" class="pick" data-action="pick" data-avatar="${esc(id)}" aria-pressed="${pressed ? "true" : "false"}" aria-label="${esc(label)}"><span class="avatar">${avatarSvg(id)}</span><small>${esc(label)}</small></button>`;
 }
 
-function normalizeCode(value) {
-  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function formatCode(code) {
-  if (!code || code.length < 8) return code || "";
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
+function digits(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 5);
 }
 
 function formatDelta(value) {
   const number = Number(value) || 0;
   return number > 0 ? `+${number}` : String(number);
-}
-
-function formatWhen(iso) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const time = date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-  if (date.toDateString() === new Date().toDateString()) return time;
-  const day = date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
-  return `${day} ${time}`;
 }
 
 function readJsonStorage(key, fallback) {
@@ -119,6 +111,22 @@ function writeJsonStorage(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // Private mode can refuse storage; the table still works for this visit.
+  }
+}
+
+function loadNickname() {
+  try {
+    return String(localStorage.getItem("mj.nickname") || "").slice(0, 12);
+  } catch {
+    return "";
+  }
+}
+
+function saveNickname(name) {
+  try {
+    localStorage.setItem("mj.nickname", name);
+  } catch {
+    // The seat is already saved on the server.
   }
 }
 
@@ -139,7 +147,7 @@ function saveSession() {
 
 function loadRecents() {
   const recents = readJsonStorage("mj.recents", []);
-  return Array.isArray(recents) ? recents : [];
+  return Array.isArray(recents) ? recents.filter((item) => /^\d{5}$/.test(item.code || "")) : [];
 }
 
 function remember(room) {
@@ -164,6 +172,10 @@ function canManage() {
 
 function localIds() {
   return new Set(Object.keys(state.session.players || {}));
+}
+
+function playerName(id) {
+  return state.room?.players.find((player) => player.id === id)?.name || "有人";
 }
 
 async function request(url, options = {}) {
@@ -192,565 +204,299 @@ function toast(message) {
   }, 1800);
 }
 
-function showSheetError(message) {
-  state.error = message;
-  const el = document.querySelector("#sheet-error");
-  if (el) el.textContent = message;
-  else toast(message);
+function parseScore(raw) {
+  const text = String(raw ?? "").trim();
+  if (text === "" || text === "-" || text === "+") return { ok: true, value: 0, empty: true };
+  if (!/^[+-]?\d+$/.test(text)) return { ok: false, value: 0, empty: false };
+  const value = Number(text);
+  if (!Number.isInteger(value) || Math.abs(value) > 1000000) return { ok: false, value: 0, empty: false };
+  return { ok: true, value, empty: false };
 }
 
-function playerName(id) {
-  return state.room?.players.find((player) => player.id === id)?.name || "有人";
-}
-
-function previewText() {
+function scoreState() {
   const players = state.room?.players || [];
-  const { kind, winnerId, payerId, points, deltas } = state.record;
-  const pts = Number(points);
-  if (kind === "draw") return "这一局流局，分数不变。";
-  if (kind === "zimo") {
-    if (!winnerId || !Number.isInteger(pts) || pts < 1) return "选胡牌的人，再填每人出多少。";
-    return `${playerName(winnerId)} +${pts * (players.length - 1)}，其余各 -${pts}`;
+  let sum = 0;
+  let any = false;
+  let bad = false;
+  const deltas = {};
+  for (const player of players) {
+    const parsed = parseScore(state.scores[player.id] ?? "");
+    if (!parsed.ok) bad = true;
+    deltas[player.id] = parsed.value;
+    sum += parsed.value;
+    if (!parsed.empty && parsed.value !== 0) any = true;
   }
-  if (kind === "dianpao") {
-    if (!winnerId || !payerId || winnerId === payerId || !Number.isInteger(pts) || pts < 1) {
-      return "选胡牌的人、点炮的人，再填分数。";
-    }
-    return `${playerName(payerId)} -${pts}，${playerName(winnerId)} +${pts}`;
-  }
-  const sum = players.reduce((total, player) => total + (deltas[player.id] || 0), 0);
-  if (sum !== 0) return `现在合计 ${formatDelta(sum)}，要凑成 0。`;
-  const parts = players
-    .filter((player) => (deltas[player.id] || 0) !== 0)
-    .map((player) => `${player.name} ${formatDelta(deltas[player.id])}`);
-  return parts.length ? parts.join("，") : "给有输赢的人加减分。";
+  let hint = "给每人填这一局的分数";
+  if (bad) hint = "请填整数";
+  else if (any && sum !== 0) hint = `合计 ${formatDelta(sum)}`;
+  else if (any) hint = "合计 0";
+  return { ok: !bad && any && sum === 0 && players.length >= 2, deltas, hint };
 }
 
-function canCommit() {
+function updateSum() {
+  const el = document.querySelector("#sum");
+  const button = document.querySelector("[data-action='commit']");
+  const parsed = scoreState();
+  if (el) {
+    el.textContent = parsed.hint;
+    el.className = parsed.ok ? "sum ok" : "sum";
+  }
+  if (button) button.disabled = !parsed.ok;
+}
+
+function leaderId() {
   const players = state.room?.players || [];
-  if (players.length < 2) return false;
-  const { kind, winnerId, payerId, points, deltas } = state.record;
-  const pts = Number(points);
-  if (kind === "draw") return true;
-  if (kind === "zimo") return Boolean(winnerId) && Number.isInteger(pts) && pts >= 1;
-  if (kind === "dianpao") {
-    return Boolean(winnerId && payerId && winnerId !== payerId) && Number.isInteger(pts) && pts >= 1;
-  }
-  const sum = players.reduce((total, player) => total + (deltas[player.id] || 0), 0);
-  const any = players.some((player) => (deltas[player.id] || 0) !== 0);
-  return sum === 0 && any;
-}
-
-function renderHome(error = state.homeError) {
-  state.homeError = error || "";
-  document.body.classList.remove("lock");
-  const recents = loadRecents();
-  const recentHtml = recents.length
-    ? `<section class="panel"><h2>回到牌桌</h2><div class="recent-list">${recents.map((item) => `<button type="button" class="recent" data-action="open-recent" data-code="${esc(item.code)}"><strong>${esc(formatCode(item.code))}</strong><span>${esc(item.names.length ? item.names.join("、") : "还没有人坐下")}</span></button>`).join("")}</div></section>`
-    : "";
-  document.querySelector("#app").innerHTML = `<main class="home">
-    <div class="mark" aria-hidden="true"><span>中</span><span>发</span><span>白</span></div>
-    <p class="kicker">牌桌账本</p>
-    <h1>麻将记分</h1>
-    <p class="lede">同桌各自输入名字、选一个头像。自摸、点炮和手动加减都记在后台，几台手机看的是同一张账。</p>
-    ${state.homeError ? `<p class="banner">${esc(state.homeError)}</p>` : ""}
-    <div class="panel stack">
-      <button type="button" class="btn primary block" data-action="create-room">开一桌</button>
-    </div>
-    <form class="panel stack" data-form="join">
-      <label for="join-code">已有房间号</label>
-      <input id="join-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="例如 K7M2-P9QX" />
-      <button type="submit" class="btn ghost block">加入这桌</button>
-    </form>
-    ${recentHtml}
-  </main>`;
-}
-
-function renderTableShell() {
-  document.querySelector("#app").innerHTML = `<div id="table"><div id="board"></div><div id="sheet-root" hidden></div></div>`;
-}
-
-function scoreClass(total) {
-  if (total > 0) return "plus";
-  if (total < 0) return "minus";
-  return "zero";
-}
-
-function played(playerId) {
-  return (state.room?.rounds || []).some((round) => Object.prototype.hasOwnProperty.call(round.deltas, playerId));
-}
-
-function paintBoard() {
-  const board = document.querySelector("#board");
-  if (!board) return;
-  if (!state.room) {
-    board.innerHTML = `<header class="topbar"><button type="button" class="text-btn" data-action="home">首页</button></header>
-      <p class="lede">${esc(state.failed || "正在铺桌…")}</p>`;
-    return;
-  }
-  const players = state.room.players;
-  const locals = localIds();
-  const markLocal = players.some((player) => locals.has(player.id)) && players.some((player) => !locals.has(player.id));
-  const leaderId = leaderOf(players);
-  const manageable = canManage();
-  const playerHtml = players.length
-    ? players.map((player, index) => {
-        const acts = manageable
-          ? `<div class="subacts"><button type="button" data-action="edit-player" data-id="${esc(player.id)}">改名</button>${played(player.id) ? "" : `<button type="button" data-action="remove-player" data-id="${esc(player.id)}">${state.pendingRemove === player.id ? "确认移出" : "移出"}</button>`}</div>`
-          : "";
-        return `<article class="player">
-          <div class="avatar">${avatarSvg(player.avatar)}</div>
-          <div>
-            <div class="name-line">
-              <h2 class="name">${esc(player.name)}</h2>
-              <span class="tag">${esc(WINDS[index] || `${index + 1}座`)}</span>
-              ${player.id === leaderId ? `<span class="tag">领先</span>` : ""}
-              ${markLocal && locals.has(player.id) ? `<span class="tag me">本机</span>` : ""}
-            </div>
-            ${acts}
-          </div>
-          <p class="score ${scoreClass(player.total)}">${esc(formatDelta(player.total))}</p>
-        </article>`;
-      }).join("")
-    : `<div class="empty"><p>这桌还空着。</p><p>写下名字，选一个头像，先坐下。</p></div>`;
-
-  const rounds = state.room.rounds;
-  const history = rounds.length
-    ? rounds.map((round) => `<article class="round"><div class="round-top"><strong>第 ${round.seq} 局 · ${esc(kindLabel(round.kind))}</strong><span>${esc(formatWhen(round.createdAt))}</span></div><p>${esc(roundSummary(round))}</p><div class="deltas">${players.filter((player) => Object.prototype.hasOwnProperty.call(round.deltas, player.id)).map((player) => `<span>${esc(player.name)} ${esc(formatDelta(round.deltas[player.id] || 0))}</span>`).join("")}</div></article>`).join("")
-    : `<div class="empty"><p>还没有对局。</p><p>人坐齐了，就记第一局。</p></div>`;
-
-  const undo = rounds.length && manageable
-    ? `<button type="button" class="text-btn" data-action="undo">${state.undoArmed ? "确认撤销" : "撤销上一局"}</button>`
-    : "";
-  const primary = manageable
-    ? `<button type="button" class="btn primary" data-action="open-record" ${players.length < 2 ? "disabled" : ""}>${players.length < 2 ? "还差一位" : "记一局"}</button>`
-    : `<button type="button" class="btn primary" data-action="open-sit">坐下</button>`;
-  const secondary = manageable && players.length < 8
-    ? `<button type="button" class="btn ghost" data-action="open-sit">${players.length ? "加人" : "坐下"}</button>`
-    : `<button type="button" class="btn ghost" data-action="copy-code">复制房间号</button>`;
-
-  board.innerHTML = `<header class="topbar">
-      <div>
-        <button type="button" class="code-btn" data-action="copy-code" aria-label="复制房间号">
-          <small>房间号</small>
-          <strong>${esc(formatCode(state.room.code))}</strong>
-        </button>
-        <p class="sync">${esc(syncLabel())}</p>
-      </div>
-      <button type="button" class="text-btn" data-action="home">首页</button>
-    </header>
-    <section class="players" aria-live="polite">${playerHtml}</section>
-    <div class="section-head"><h2>对局</h2>${undo}</div>
-    <section class="history">${history}</section>
-    <div class="dock">${secondary}${primary}</div>`;
-}
-
-function leaderOf(players) {
   if (players.length < 2) return "";
+  if (players.every((player) => player.total === 0)) return "";
   const top = Math.max(...players.map((player) => player.total));
-  const low = Math.min(...players.map((player) => player.total));
-  if (top === low) return "";
   const leaders = players.filter((player) => player.total === top);
   return leaders.length === 1 ? leaders[0].id : "";
 }
 
-function kindLabel(kind) {
-  return { zimo: "自摸", dianpao: "点炮", manual: "手动", draw: "流局" }[kind] || "记分";
+function played(id) {
+  return (state.room?.rounds || []).some((round) => Object.prototype.hasOwnProperty.call(round.deltas || {}, id));
 }
 
-function roundSummary(round) {
-  if (round.kind === "zimo") return `${playerName(round.winnerId)} 自摸，每人出 ${round.points}`;
-  if (round.kind === "dianpao") return `${playerName(round.payerId)} 点炮，${playerName(round.winnerId)} 进 ${round.points}`;
-  if (round.kind === "draw") return round.note || "流局";
-  return round.note || "手动记了一笔";
-}
-
-function syncLabel() {
-  if (state.offline) return "暂时没连上，分数还是刚才的";
-  const count = state.room?.players.length || 0;
-  return `${count} 人在座 · 已同步`;
-}
-
-function paintSync() {
-  const el = document.querySelector(".sync");
-  if (el) el.textContent = syncLabel();
-}
-
-function currentName() {
-  const input = document.querySelector("#player-name");
-  return input ? input.value : state.draftName;
-}
-
-function paintSheet() {
-  const root = document.querySelector("#sheet-root");
-  if (!root) return;
-  if (!state.sheet) {
-    root.hidden = true;
-    root.innerHTML = "";
-    document.body.classList.remove("lock");
-    return;
-  }
-  document.body.classList.add("lock");
-  root.hidden = false;
-  root.innerHTML = state.sheet === "record" ? recordSheet() : sitSheet(currentName() || state.draftName);
-  const input = root.querySelector("#player-name");
-  if (input) {
-    input.focus();
-    const end = input.value.length;
-    input.setSelectionRange(end, end);
-  }
-}
-
-function sitSheet(name) {
-  const title = state.sheet === "edit" ? "改一下" : "坐下";
-  const picked = state.pickedAvatar || state.avatars[0]?.id || "";
-  state.pickedAvatar = picked;
-  const codeLine = state.sheet === "sit"
-    ? `<button type="button" class="code-inline" data-action="copy-code">房间号 ${esc(formatCode(state.code))}，点此复制</button>`
-    : "";
-  return `<div class="backdrop" data-action="close-sheet"><div class="sheet" data-action="hold">
-    <div class="grabber"></div>
-    <div class="sheet-head"><h2>${title}</h2><button type="button" data-action="close-sheet">关闭</button></div>
-    ${codeLine}
-    <form data-form="sit">
-      <label class="field-label" for="player-name">名字</label>
-      <input id="player-name" type="text" maxlength="12" autocomplete="nickname" placeholder="怎么称呼" value="${esc(name || "")}" />
-      <p class="field-label">选一个头像</p>
-      <div class="picker">${state.avatars.map((avatar) => avatarButton(avatar.id, { pressed: avatar.id === picked, action: "pick-avatar" })).join("")}</div>
-      <p id="sheet-error" class="sheet-error">${esc(state.error)}</p>
-      <button type="submit" class="btn ink block">${state.sheet === "edit" ? "保存" : "坐下"}</button>
-    </form>
-  </div></div>`;
-}
-
-function recordSheet() {
-  const { kind, winnerId, payerId, points } = state.record;
-  const players = state.room?.players || [];
-  const choices = (action, selected) => players.map((player) => `<button type="button" class="pick" data-action="${action}" data-id="${esc(player.id)}" aria-pressed="${player.id === selected ? "true" : "false"}"><span class="avatar">${avatarSvg(player.avatar)}</span><small>${esc(player.name)}</small></button>`).join("");
-  const pointBlock = kind === "manual"
-    ? players.map((player) => `<div class="manual-row"><span class="avatar">${avatarSvg(player.avatar)}</span><strong>${esc(player.name)}</strong><div class="manual-steps"><div class="stepper"><button type="button" data-action="step" data-id="${esc(player.id)}" data-by="-10">-10</button><button type="button" data-action="step" data-id="${esc(player.id)}" data-by="-1">-1</button></div><b data-delta="${esc(player.id)}">${esc(formatDelta(state.record.deltas[player.id] || 0))}</b><div class="stepper"><button type="button" data-action="step" data-id="${esc(player.id)}" data-by="1">+1</button><button type="button" data-action="step" data-id="${esc(player.id)}" data-by="10">+10</button></div></div></div>`).join("")
-    : kind === "draw"
-      ? ""
-      : `<p class="points" id="points-display">${esc(points || "0")}</p>
-        <div class="chips">${QUICK_POINTS.map((n) => `<button type="button" data-action="chip" data-points="${n}">${n}</button>`).join("")}</div>
-        <div class="keypad">${[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"], ["7", "7"], ["8", "8"], ["9", "9"], ["00", "00"], ["0", "0"], ["back", "删"]].map(([key, label]) => `<button type="button" data-action="digit" data-key="${key}">${label}</button>`).join("")}</div>`;
-  const who = kind === "draw" || kind === "manual"
-    ? ""
-    : `<p class="field-label">谁胡了</p><div class="choices">${choices("pick-winner", winnerId)}</div>${kind === "dianpao" ? `<p class="field-label">谁点炮</p><div class="choices">${choices("pick-payer", payerId)}</div>` : ""}`;
-  return `<div class="backdrop" data-action="close-sheet"><div class="sheet" data-action="hold">
-    <div class="grabber"></div>
-    <div class="sheet-head"><h2>记一局</h2><button type="button" data-action="close-sheet">关闭</button></div>
-    <div class="segment">${[["zimo", "自摸"], ["dianpao", "点炮"], ["manual", "手动"], ["draw", "流局"]].map(([id, label]) => `<button type="button" data-action="kind" data-kind="${id}" aria-pressed="${kind === id ? "true" : "false"}">${label}</button>`).join("")}</div>
-    ${who}
-    ${pointBlock}
-    <input id="round-note" class="note" maxlength="30" placeholder="备注，例如 清一色" value="${esc(state.record.note)}" />
-    <p class="preview" id="preview">${esc(previewText())}</p>
-    <p id="sheet-error" class="sheet-error">${esc(state.error)}</p>
-    <div class="sheet-actions">
-      <button type="button" class="btn ink block" id="commit-round" data-action="commit" ${canCommit() && !state.busy ? "" : "disabled"}>确认入账</button>
+function renderHome() {
+  const nickname = loadNickname();
+  const recents = loadRecents().slice(0, 2);
+  const recentHtml = recents.map((item) => `
+    <button type="button" class="recent" data-action="open" data-code="${esc(item.code)}">
+      <b>${esc(item.code)}</b>
+      <small>${esc(item.names.join("、") || "还没有人")}</small>
+    </button>`).join("");
+  return `<div class="screen home">
+    <header class="hero">
+      <p class="eyebrow">春天开一桌</p>
+      <h1>麻将记分</h1>
+      <p class="lede">五位数字进同一间，给每人直接填分数。</p>
+    </header>
+    <div class="body">
+      <button type="button" class="btn primary" data-action="create">开一桌</button>
+      <form id="join-form" class="stack">
+        <label for="join-code">房间号</label>
+        <input id="join-code" class="code-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="38421" aria-label="五位数字房间号">
+        <button class="btn mint" type="submit">进入</button>
+      </form>
+      ${nickname ? `<p class="hint">称呼已记住：${esc(nickname)}，下次直接用</p>` : `<p class="hint">第一次坐下后，称呼会记在这台手机上</p>`}
+      ${recentHtml ? `<div class="recents">${recentHtml}</div>` : ""}
+      <p class="error">${esc(state.homeError)}</p>
     </div>
-  </div></div>`;
+  </div>`;
 }
 
-function syncRecord() {
-  const display = document.querySelector("#points-display");
-  if (display) display.textContent = state.record.points || "0";
-  const preview = document.querySelector("#preview");
-  if (preview) preview.textContent = previewText();
-  document.querySelectorAll("[data-delta]").forEach((el) => {
-    el.textContent = formatDelta(state.record.deltas[el.getAttribute("data-delta")] || 0);
-  });
-  document.querySelectorAll("[data-action='pick-winner']").forEach((el) => {
-    el.setAttribute("aria-pressed", el.getAttribute("data-id") === state.record.winnerId ? "true" : "false");
-  });
-  document.querySelectorAll("[data-action='pick-payer']").forEach((el) => {
-    el.setAttribute("aria-pressed", el.getAttribute("data-id") === state.record.payerId ? "true" : "false");
-  });
-  const commit = document.querySelector("#commit-round");
-  if (commit) commit.disabled = !canCommit() || state.busy;
+function renderSeat() {
+  const title = state.panel === "edit" ? "改一下" : "怎么称呼";
+  const canRemove = state.panel === "edit" && !played(state.editingId);
+  return `<div class="screen">
+    <header class="top">
+      <button type="button" class="home-link" data-action="close-panel">返回</button>
+      <span class="meta">${esc(state.code)}</span>
+    </header>
+    <div class="body">
+      <h2 class="panel-title">${title}</h2>
+      <input id="seat-name" class="name-input" maxlength="12" autocomplete="nickname" placeholder="例如 阿明" value="${esc(state.draftName)}" aria-label="称呼">
+      <div class="picks">${state.avatars.map((avatar) => avatarButton(avatar.id)).join("")}</div>
+    </div>
+    <div class="dock">
+      ${canRemove ? `<button type="button" class="btn danger" data-action="remove">移出</button>` : ""}
+      <button type="button" class="btn primary" data-action="${state.panel === "edit" ? "save-edit" : "save-sit"}">${state.panel === "edit" ? "保存" : "坐下"}</button>
+    </div>
+  </div>`;
 }
 
-function openSit() {
-  state.sheet = "sit";
-  state.editingId = "";
-  state.draftName = "";
-  state.pickedAvatar = state.avatars[0]?.id || "";
-  state.error = "";
-  paintSheet();
+function renderPlayer(player) {
+  const mine = localIds().has(player.id);
+  const wind = WINDS[(Math.max(player.seat, 1) - 1) % WINDS.length];
+  const leader = leaderId() === player.id ? " leader" : "";
+  const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
+  const score = state.panel === "record"
+    ? `<div class="score-field">
+        <button type="button" class="sign" data-action="flip" data-player="${esc(player.id)}" aria-label="正负切换">−</button>
+        <input class="score-input" inputmode="text" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" aria-label="${esc(player.name)} 这一局的分数">
+      </div>`
+    : `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
+  const edit = state.panel !== "record" && state.room.status !== "ended" && canManage()
+    ? `<button type="button" class="edit" data-action="edit" data-player="${esc(player.id)}" aria-label="修改${esc(player.name)}">改</button>`
+    : "";
+  return `<li class="player${leader}">
+    <span class="avatar">${avatarSvg(player.avatar)}</span>
+    <div class="who">
+      <strong>${esc(player.name)}</strong>
+      <em>${wind}${mine ? `<span class="me">我</span>` : ""}</em>
+    </div>
+    ${score}
+    ${edit}
+  </li>`;
 }
 
-function openEdit(id) {
-  const player = state.room?.players.find((item) => item.id === id);
-  if (!player) return;
-  state.sheet = "edit";
-  state.editingId = id;
-  state.draftName = player.name;
-  state.pickedAvatar = player.avatar;
-  state.error = "";
-  paintSheet();
+function renderHistory() {
+  const rounds = state.room.rounds || [];
+  if (!rounds.length) return `<div class="history"><p class="hint">还没有对局。记一局时，给每人填上这一局的增减。</p></div>`;
+  const undo = state.room.status !== "ended" && canManage()
+    ? `<button type="button" class="link" data-action="undo">${state.undoArmed ? "确定撤销" : "撤销上一局"}</button>`
+    : "";
+  const lines = rounds.map((round) => {
+    const parts = Object.entries(round.deltas || {})
+      .filter(([, delta]) => delta)
+      .map(([id, delta]) => `${playerName(id)} ${formatDelta(delta)}`);
+    return `<p class="round"><b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span></p>`;
+  }).join("");
+  return `<div class="history"><div class="history-head"><span>已经记下</span>${undo}</div>${lines}</div>`;
 }
 
-function openRecord() {
-  if (!state.room || state.room.players.length < 2 || !canManage()) return;
-  const deltas = {};
-  for (const player of state.room.players) deltas[player.id] = 0;
-  state.record = { ...emptyRecord(), deltas };
-  state.recordPlayerKey = state.room.players.map((player) => player.id).join();
-  state.sheet = "record";
-  state.error = "";
-  paintSheet();
+function renderDock() {
+  if (state.panel === "record") {
+    return `<button type="button" class="btn ghost" data-action="cancel-record">取消</button>
+      <p id="sum" class="sum">给每人填这一局的分数</p>
+      <button type="button" class="btn primary" data-action="commit" disabled>记下</button>`;
+  }
+  if (state.room.status === "ended") return `<p class="ended">这桌已经结束，总分留在这里</p>`;
+  const seated = [...localIds()].some((id) => state.room.players.some((player) => player.id === id));
+  const parts = [];
+  if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
+  if (canManage() && state.room.players.length >= 2) {
+    parts.push(`<button type="button" class="btn ghost" data-action="ask-end">结束对局</button>`);
+    parts.push(`<button type="button" class="btn primary" data-action="open-record">记一局</button>`);
+  } else if (seated) {
+    parts.push(`<p class="ended">再等一位坐下就能记分</p>`);
+  }
+  return parts.join("");
 }
 
-function closeSheet() {
-  state.sheet = null;
-  state.error = "";
-  paintSheet();
+function renderTable() {
+  if (state.panel === "sit" || state.panel === "edit") return renderSeat();
+  const count = `${state.room.players.length} 人`;
+  const meta = state.room.status === "ended" ? "已结束" : count;
+  return `<div class="screen">
+    <header class="top">
+      <button type="button" class="home-link" data-action="home">首页</button>
+      <button type="button" class="code-chip" data-action="copy" aria-label="复制房间号">${esc(state.code)}</button>
+      <span class="meta">${meta}</span>
+    </header>
+    <div class="body">
+      <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
+      ${state.panel === "record" ? "" : renderHistory()}
+    </div>
+    <div class="dock">${renderDock()}</div>
+  </div>`;
 }
 
-async function createRoom(button) {
+function renderModal() {
+  if (!state.confirmEnd) return "";
+  return `<div class="modal-root">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <h2 id="end-title">结束这桌？</h2>
+      <p>结束后不能再记分，总分会留下来。</p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-action="cancel-end">再玩一会儿</button>
+        <button type="button" class="btn primary" data-action="confirm-end">结束对局</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function paint() {
+  const app = document.querySelector("#app");
+  app.innerHTML = state.view === "home" ? renderHome() : `${renderTable()}${renderModal()}`;
+  if (state.panel === "record") updateSum();
+}
+
+async function guard(fn) {
   if (state.busy) return;
   state.busy = true;
-  if (button) button.disabled = true;
   try {
-    const data = await request("/api/rooms", { method: "POST", body: "{}" });
-    state.session = { hostToken: data.hostToken, players: {} };
-    state.code = data.code;
-    saveSession();
-    location.hash = `#/r/${data.code}`;
+    await fn();
   } catch (error) {
+    toast(error.message || "没有连上牌桌");
+  } finally {
     state.busy = false;
-    renderHome(error.message);
   }
 }
 
-function joinFromHome() {
-  const code = normalizeCode(document.querySelector("#join-code")?.value || "");
-  if (code.length !== 8) {
-    renderHome("房间号是 8 位，像 K7M2-P9QX");
+function openRoom(code) {
+  if (!/^\d{5}$/.test(code)) {
+    state.homeError = "房间号是 5 位数字";
+    paint();
     return;
   }
-  location.hash = `#/r/${code}`;
+  state.homeError = "";
+  if (location.hash === `#/r/${code}`) loadRoom(code);
+  else location.hash = `#/r/${code}`;
 }
 
-async function openRoom(code) {
+async function createRoom() {
+  await guard(async () => {
+    const data = await request("/api/rooms", { method: "POST", body: "{}" });
+    state.code = data.code;
+    state.session = { hostToken: data.hostToken, players: {} };
+    saveSession();
+    state.room = data.room;
+    state.view = "table";
+    state.panel = "sit";
+    state.draftName = loadNickname();
+    state.pickedAvatar = state.avatars[0] ? state.avatars[0].id : "";
+    state.confirmEnd = false;
+    history.replaceState(null, "", `#/r/${data.code}`);
+    remember(data.room);
+    paint();
+    startPoll();
+    const input = document.querySelector("#seat-name");
+    if (input) input.focus();
+  });
+}
+
+async function loadRoom(code) {
   stopPoll();
-  state.view = "table";
   state.code = code;
   state.session = loadSession(code);
-  state.room = null;
-  state.failed = "";
-  state.sheet = null;
-  state.undoArmed = false;
-  state.pendingRemove = "";
-  state.busy = false;
-  renderTableShell();
-  paintBoard();
+  state.view = "table";
+  state.panel = null;
+  state.confirmEnd = false;
   try {
     const data = await request(`/api/rooms/${code}`);
-    if (state.code !== code || state.view !== "table") return;
     state.room = data.room;
-    state.offline = false;
     remember(data.room);
-    document.title = `麻将记分 · ${formatCode(code)}`;
-    paintBoard();
-    if (data.room.players.length === 0) openSit();
+    paint();
     startPoll();
   } catch (error) {
-    if (state.code !== code) return;
-    state.failed = error.message;
-    paintBoard();
+    state.view = "home";
+    state.room = null;
+    state.homeError = error.message;
+    history.replaceState(null, "", "#/");
+    paint();
   }
-}
-
-async function submitSit() {
-  const name = document.querySelector("#player-name")?.value || "";
-  const avatar = state.pickedAvatar;
-  if (!avatar) {
-    showSheetError("请选一个头像");
-    return;
-  }
-  if (state.busy) return;
-  state.busy = true;
-  const button = document.querySelector("[data-form='sit'] button[type='submit']");
-  if (button) button.disabled = true;
-  try {
-    if (state.sheet === "edit") {
-      const data = await request(`/api/rooms/${state.code}/players/${state.editingId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name, avatar }),
-      });
-      state.room = data.room;
-      toast("改好了");
-    } else {
-      const data = await request(`/api/rooms/${state.code}/players`, {
-        method: "POST",
-        body: JSON.stringify({ name, avatar }),
-      });
-      state.session.players[data.player.id] = data.token;
-      saveSession();
-      state.room = data.room;
-      toast(`${data.player.name} 坐下了`);
-    }
-    remember(state.room);
-    state.sheet = null;
-    state.error = "";
-    paintBoard();
-    paintSheet();
-  } catch (error) {
-    showSheetError(error.message);
-    if (button) button.disabled = false;
-  } finally {
-    state.busy = false;
-  }
-}
-
-async function removePlayer(id) {
-  if (state.pendingRemove !== id) {
-    state.pendingRemove = id;
-    paintBoard();
-    return;
-  }
-  state.pendingRemove = "";
-  if (state.busy) return;
-  state.busy = true;
-  try {
-    const data = await request(`/api/rooms/${state.code}/players/${id}`, { method: "DELETE" });
-    delete state.session.players[id];
-    saveSession();
-    state.room = data.room;
-    remember(data.room);
-    paintBoard();
-    toast("已移出");
-  } catch (error) {
-    toast(error.message);
-    paintBoard();
-  } finally {
-    state.busy = false;
-  }
-}
-
-async function commitRound() {
-  if (!canCommit() || state.busy) return;
-  const { kind, winnerId, payerId, points, deltas, note } = state.record;
-  const body = { kind, note };
-  if (kind === "zimo") {
-    body.winnerId = winnerId;
-    body.points = Number(points);
-  } else if (kind === "dianpao") {
-    body.winnerId = winnerId;
-    body.payerId = payerId;
-    body.points = Number(points);
-  } else if (kind === "manual") {
-    body.deltas = {};
-    for (const player of state.room.players) body.deltas[player.id] = deltas[player.id] || 0;
-  }
-  state.busy = true;
-  syncRecord();
-  try {
-    const data = await request(`/api/rooms/${state.code}/rounds`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    state.room = data.room;
-    state.sheet = null;
-    state.error = "";
-    remember(data.room);
-    paintBoard();
-    paintSheet();
-    toast("这一局记下了");
-    if (navigator.vibrate) navigator.vibrate(12);
-  } catch (error) {
-    showSheetError(error.message);
-  } finally {
-    state.busy = false;
-    syncRecord();
-  }
-}
-
-async function undoRound() {
-  const latest = state.room?.rounds[0];
-  if (!latest || state.busy) return;
-  if (!state.undoArmed) {
-    state.undoArmed = true;
-    paintBoard();
-    clearTimeout(state.undoTimer);
-    state.undoTimer = setTimeout(() => {
-      state.undoArmed = false;
-      if (state.view === "table" && !state.sheet) paintBoard();
-    }, 4000);
-    return;
-  }
-  state.undoArmed = false;
-  state.busy = true;
-  try {
-    const data = await request(`/api/rooms/${state.code}/rounds/${latest.id}`, { method: "DELETE" });
-    state.room = data.room;
-    remember(data.room);
-    paintBoard();
-    toast("已撤销上一局");
-  } catch (error) {
-    toast(error.message);
-    paintBoard();
-  } finally {
-    state.busy = false;
-  }
-}
-
-async function copyCode() {
-  const text = formatCode(state.code);
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    document.body.appendChild(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
-  }
-  toast("房间号已复制");
-}
-
-function pushDigit(key) {
-  if (key === "back") state.record.points = state.record.points.slice(0, -1);
-  else {
-    const next = `${state.record.points}${key}`.replace(/^0+/, "");
-    if (next.length <= 6 && Number(next) <= 100000) state.record.points = next;
-  }
-  syncRecord();
-}
-
-function reconcileRecord() {
-  if (state.sheet !== "record" || !state.room) return;
-  const ids = new Set(state.room.players.map((player) => player.id));
-  if (state.record.winnerId && !ids.has(state.record.winnerId)) state.record.winnerId = "";
-  if (state.record.payerId && !ids.has(state.record.payerId)) state.record.payerId = "";
-  for (const player of state.room.players) {
-    if (state.record.deltas[player.id] === undefined) state.record.deltas[player.id] = 0;
-  }
-  const key = state.room.players.map((player) => player.id).join();
-  if (key !== state.recordPlayerKey) {
-    state.recordPlayerKey = key;
-    paintSheet();
-  } else syncRecord();
 }
 
 async function refreshRoom() {
-  if (state.view !== "table" || !state.code || state.busy) return;
+  if (document.hidden || state.view !== "table" || !state.code) return;
   try {
     const data = await request(`/api/rooms/${state.code}`);
-    if (state.code !== data.room.code) return;
-    state.offline = false;
-    const same = JSON.stringify(data.room) === JSON.stringify(state.room);
+    const previousIds = (state.room?.players || []).map((player) => player.id).join();
+    const previousRound = state.room?.rounds?.[0]?.id || "";
+    const previousStatus = state.room?.status;
     state.room = data.room;
-    if (!same) {
-      remember(data.room);
-      paintBoard();
-      reconcileRecord();
-    } else paintSync();
+    const nextIds = data.room.players.map((player) => player.id).join();
+    const nextRound = data.room.rounds[0]?.id || "";
+    if (data.room.status === "ended" && state.panel === "record") {
+      state.panel = null;
+      state.scores = {};
+      paint();
+      return;
+    }
+    if (state.panel === "sit" || state.panel === "edit" || state.confirmEnd) return;
+    if (state.panel === "record") {
+      if (previousIds === nextIds && previousStatus === data.room.status) return;
+      for (const player of data.room.players) {
+        if (state.scores[player.id] == null) state.scores[player.id] = "";
+      }
+      paint();
+      return;
+    }
+    if (previousIds === nextIds && previousRound === nextRound && previousStatus === data.room.status) return;
+    paint();
   } catch {
-    state.offline = true;
-    paintSync();
+    toast("没有连上牌桌");
   }
 }
 
@@ -764,108 +510,275 @@ function stopPoll() {
   state.pollTimer = 0;
 }
 
-function onClick(event) {
-  const target = event.target.closest("[data-action]");
-  if (!target) return;
-  const action = target.getAttribute("data-action");
-  if (action === "hold") return;
-  if (action === "create-room") createRoom(target);
-  else if (action === "open-recent") location.hash = `#/r/${normalizeCode(target.getAttribute("data-code"))}`;
-  else if (action === "home") {
-    stopPoll();
-    document.title = "麻将记分";
-    location.hash = "#/";
-  }
-  else if (action === "copy-code") copyCode();
-  else if (action === "open-sit") openSit();
-  else if (action === "edit-player") openEdit(target.getAttribute("data-id"));
-  else if (action === "remove-player") removePlayer(target.getAttribute("data-id"));
-  else if (action === "open-record") openRecord();
-  else if (action === "undo") undoRound();
-  else if (action === "close-sheet") closeSheet();
-  else if (action === "pick-avatar") {
-    state.draftName = currentName();
-    state.pickedAvatar = target.getAttribute("data-avatar");
-    paintSheet();
-  }
-  else if (action === "kind") {
-    state.record.kind = target.getAttribute("data-kind");
-    state.record.note = document.querySelector("#round-note")?.value || state.record.note;
-    state.error = "";
-    paintSheet();
-  }
-  else if (action === "pick-winner") {
-    state.record.winnerId = target.getAttribute("data-id");
-    if (state.record.payerId === state.record.winnerId) state.record.payerId = "";
-    syncRecord();
-  }
-  else if (action === "pick-payer") {
-    state.record.payerId = target.getAttribute("data-id");
-    if (state.record.payerId === state.record.winnerId) state.record.winnerId = "";
-    syncRecord();
-  }
-  else if (action === "digit") pushDigit(target.getAttribute("data-key"));
-  else if (action === "chip") {
-    state.record.points = String(target.getAttribute("data-points"));
-    syncRecord();
-  }
-  else if (action === "step") {
-    const id = target.getAttribute("data-id");
-    const next = (state.record.deltas[id] || 0) + Number(target.getAttribute("data-by"));
-    if (Math.abs(next) <= 1000000) state.record.deltas[id] = next;
-    syncRecord();
-  }
-  else if (action === "commit") commitRound();
+function cleanDraft() {
+  return state.draftName.trim().slice(0, 12);
 }
 
-function onSubmit(event) {
-  if (event.target.matches("[data-form='join']")) {
-    event.preventDefault();
-    joinFromHome();
-  } else if (event.target.matches("[data-form='sit']")) {
-    event.preventDefault();
-    submitSit();
+async function saveSit() {
+  const name = cleanDraft();
+  if (!name) {
+    toast("先写一个称呼");
+    return;
   }
+  if (!state.pickedAvatar) {
+    toast("选一个头像");
+    return;
+  }
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/players`, {
+      method: "POST",
+      body: JSON.stringify({ name, avatar: state.pickedAvatar }),
+    });
+    state.session.players[data.player.id] = data.token;
+    saveSession();
+    saveNickname(name);
+    state.room = data.room;
+    state.panel = null;
+    remember(data.room);
+    paint();
+    toast("坐下了");
+  });
+}
+
+async function saveEdit() {
+  const name = cleanDraft();
+  if (!name) {
+    toast("先写一个称呼");
+    return;
+  }
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/players/${state.editingId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name, avatar: state.pickedAvatar }),
+    });
+    saveNickname(name);
+    state.room = data.room;
+    state.panel = null;
+    remember(data.room);
+    paint();
+  });
+}
+
+async function removePlayer() {
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/players/${state.editingId}`, { method: "DELETE" });
+    delete state.session.players[state.editingId];
+    saveSession();
+    state.room = data.room;
+    state.panel = null;
+    paint();
+  });
+}
+
+function openRecord() {
+  if ((state.room?.players.length || 0) < 2) {
+    toast("至少两位才能记分");
+    return;
+  }
+  state.panel = "record";
+  state.confirmEnd = false;
+  state.scores = {};
+  for (const player of state.room.players) state.scores[player.id] = "";
+  paint();
+  const input = document.querySelector(".score-input");
+  if (input) input.focus();
+}
+
+async function commitScores() {
+  const parsed = scoreState();
+  if (!parsed.ok) {
+    toast(parsed.hint);
+    return;
+  }
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/rounds`, {
+      method: "POST",
+      body: JSON.stringify({ kind: "manual", deltas: parsed.deltas }),
+    });
+    state.room = data.room;
+    state.panel = null;
+    state.scores = {};
+    remember(data.room);
+    paint();
+    toast("记下了");
+  });
+}
+
+async function confirmEnd() {
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/end`, { method: "POST", body: "{}" });
+    state.room = data.room;
+    state.confirmEnd = false;
+    state.panel = null;
+    paint();
+    toast("这桌结束了");
+  });
+}
+
+async function undoLatest() {
+  const latest = state.room?.rounds?.[0];
+  if (!latest) return;
+  if (!state.undoArmed) {
+    state.undoArmed = true;
+    clearTimeout(state.undoTimer);
+    state.undoTimer = setTimeout(() => {
+      state.undoArmed = false;
+      const button = document.querySelector("[data-action='undo']");
+      if (button) button.textContent = "撤销上一局";
+    }, 2500);
+    const button = document.querySelector("[data-action='undo']");
+    if (button) button.textContent = "确定撤销";
+    return;
+  }
+  state.undoArmed = false;
+  await guard(async () => {
+    const data = await request(`/api/rooms/${state.code}/rounds/${latest.id}`, { method: "DELETE" });
+    state.room = data.room;
+    paint();
+    toast("已撤销上一局");
+  });
+}
+
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(state.code);
+    toast("房间号已复制");
+  } catch {
+    toast(state.code);
+  }
+}
+
+function onClick(event) {
+  const button = event.target.closest("[data-action]");
+  if (!button || !document.querySelector("#app").contains(button)) {
+    if (event.target.classList && event.target.classList.contains("modal-root")) {
+      state.confirmEnd = false;
+      paint();
+    }
+    return;
+  }
+  const action = button.dataset.action;
+  if (action === "create") createRoom();
+  else if (action === "open") openRoom(button.dataset.code || "");
+  else if (action === "home") {
+    stopPoll();
+    state.view = "home";
+    state.panel = null;
+    state.confirmEnd = false;
+    location.hash = "#/";
+    paint();
+  } else if (action === "copy") copyCode();
+  else if (action === "open-sit") {
+    state.panel = "sit";
+    state.draftName = loadNickname();
+    state.pickedAvatar = state.avatars[0] ? state.avatars[0].id : "";
+    paint();
+    const input = document.querySelector("#seat-name");
+    if (input) input.focus();
+  } else if (action === "close-panel" || action === "cancel-record") {
+    state.panel = null;
+    state.scores = {};
+    paint();
+  } else if (action === "pick") {
+    state.pickedAvatar = button.dataset.avatar || "";
+    document.querySelectorAll(".pick").forEach((item) => {
+      item.setAttribute("aria-pressed", item === button ? "true" : "false");
+    });
+  } else if (action === "save-sit") saveSit();
+  else if (action === "save-edit") saveEdit();
+  else if (action === "remove") removePlayer();
+  else if (action === "edit") {
+    const player = state.room.players.find((item) => item.id === button.dataset.player);
+    if (!player) return;
+    state.panel = "edit";
+    state.editingId = player.id;
+    state.draftName = player.name;
+    state.pickedAvatar = player.avatar;
+    paint();
+  } else if (action === "open-record") openRecord();
+  else if (action === "flip") {
+    const id = button.dataset.player;
+    const raw = String(state.scores[id] || "");
+    const next = raw.startsWith("-") ? raw.slice(1) : raw === "" ? "-" : `-${raw.replace(/^\+/, "")}`;
+    state.scores[id] = next;
+    const input = document.querySelector(`.score-input[data-player="${CSS.escape(id)}"]`);
+    if (input) input.value = next;
+    updateSum();
+  } else if (action === "commit") commitScores();
+  else if (action === "ask-end") {
+    state.confirmEnd = true;
+    paint();
+  } else if (action === "cancel-end") {
+    state.confirmEnd = false;
+    paint();
+  } else if (action === "confirm-end") confirmEnd();
+  else if (action === "undo") undoLatest();
 }
 
 function onInput(event) {
-  if (event.target.id === "round-note") state.record.note = event.target.value;
-  if (event.target.id === "player-name") state.draftName = event.target.value;
+  if (event.target.id === "join-code") {
+    const next = digits(event.target.value);
+    if (next !== event.target.value) event.target.value = next;
+    return;
+  }
+  if (event.target.id === "seat-name") {
+    state.draftName = event.target.value.slice(0, 12);
+    return;
+  }
+  if (event.target.classList.contains("score-input")) {
+    const id = event.target.dataset.player;
+    let value = event.target.value.replace(/[^\d+-]/g, "").replace(/(?!^)[+-]/g, "").slice(0, 8);
+    if (value !== event.target.value) event.target.value = value;
+    state.scores[id] = value;
+    updateSum();
+  }
+}
+
+function onSubmit(event) {
+  if (event.target.id !== "join-form") return;
+  event.preventDefault();
+  const input = event.target.querySelector("input");
+  openRoom(digits(input.value));
+}
+
+function onKeydown(event) {
+  if (event.key !== "Enter") return;
+  if (event.target.id === "seat-name") {
+    event.preventDefault();
+    if (state.panel === "edit") saveEdit();
+    else saveSit();
+  } else if (event.target.classList.contains("score-input")) {
+    event.preventDefault();
+    commitScores();
+  }
 }
 
 function route() {
-  const match = location.hash.match(/^#\/r\/([A-Za-z0-9-]+)$/);
-  const code = match ? normalizeCode(match[1]) : "";
-  if (code.length === 8) {
-    if (state.view === "table" && state.code === code && (state.room || state.failed)) return;
-    openRoom(code);
+  const match = location.hash.match(/^#\/r\/(\d{5})$/);
+  if (!match) {
+    stopPoll();
+    state.view = "home";
+    state.panel = null;
+    state.confirmEnd = false;
+    paint();
     return;
   }
-  stopPoll();
-  state.view = "home";
-  state.sheet = null;
-  state.code = "";
-  document.title = "麻将记分";
-  renderHome();
+  if (state.view === "table" && state.code === match[1] && state.room) return;
+  loadRoom(match[1]);
 }
 
 async function boot() {
-  try {
-    state.avatars = await request("/avatars.json");
-  } catch {
-    state.avatars = [];
-  }
-  if (!Array.isArray(state.avatars) || state.avatars.length === 0) {
-    state.avatars = [];
-    state.homeError = "头像没有加载出来，请刷新再试";
-  }
-  document.body.addEventListener("click", onClick);
-  document.body.addEventListener("submit", onSubmit);
-  document.body.addEventListener("input", onInput);
+  const response = await fetch("/avatars.json");
+  state.avatars = await response.json();
+  const app = document.querySelector("#app");
+  app.addEventListener("click", onClick);
+  app.addEventListener("input", onInput);
+  app.addEventListener("submit", onSubmit);
+  app.addEventListener("keydown", onKeydown);
+  window.addEventListener("hashchange", route);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshRoom();
   });
-  window.addEventListener("hashchange", route);
   route();
 }
 
