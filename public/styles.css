@@ -354,7 +354,7 @@ input:focus { border-color: var(--cyan); }
 .settlement-heading small { color: var(--cyan-deep); font-weight: 800; }
 .settlement-heading h2 { margin: 2px 0 0; font-size: 17px; }
 .settlement-heading > span { border-radius: 999px; background: var(--cyan-deep); padding: 4px 9px; color: white; font-size: 10px; font-weight: 800; }
-.settlement-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; max-height: 104px; margin-top: 10px; overflow: auto; }
+.settlement-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; margin-top: 10px; }
 .settlement-scores > div { display: grid; grid-template-columns: 18px 26px minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; }
 .settlement-scores i { color: var(--muted); font-size: 10px; font-style: normal; }
 .settlement-scores .avatar { width: 26px; height: 26px; }

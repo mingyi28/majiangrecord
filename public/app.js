@@ -585,7 +585,7 @@ function renderTable() {
       </button>
     </div>` : active ? "" : renderSettlement()}
     <div class="body">
-      <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
+      ${active ? `<ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>` : ""}
       ${renderHistory()}
     </div>
     <div class="dock">${renderDock()}</div>
