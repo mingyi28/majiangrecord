@@ -1385,10 +1385,7 @@ function onClick(event) {
     state.adminOpen = state.adminOpen === button.dataset.code ? "" : button.dataset.code || "";
     paint();
   } else if (action === "admin-out") {
-    saveAdminToken("");
-    state.admin = null;
-    state.adminError = "";
-    loadAdmin();
+    logoutAdmin();
   }
 }
 
@@ -1572,19 +1569,25 @@ function renderAdmin() {
 }
 
 async function loadAdmin() {
+  const savedToken = adminToken();
   try {
-    if (!adminToken()) {
-      state.admin = null;
-      state.adminMode = await adminRequest("/api/admin/status");
-      state.adminError = "";
-      paint();
-      return;
-    }
     state.admin = await adminRequest("/api/admin/overview");
     state.adminError = "";
     paint();
   } catch (error) {
-    if (/口令/.test(error.message)) saveAdminToken("");
+    if (/口令/.test(error.message)) {
+      if (savedToken) saveAdminToken("");
+      state.admin = null;
+      try {
+        state.adminMode = await adminRequest("/api/admin/status");
+        state.adminError = "";
+      } catch (statusError) {
+        state.adminMode = { needsSetup: false };
+        state.adminError = statusError.message;
+      }
+      paint();
+      return;
+    }
     state.admin = null;
     state.adminError = error.message;
     if (!state.adminMode) state.adminMode = { needsSetup: false };
@@ -1595,7 +1598,18 @@ async function loadAdmin() {
 async function submitAdmin(setup, password) {
   await guard(async () => {
     if (setup) await adminRequest("/api/admin/setup", { method: "POST", body: JSON.stringify({ password }) });
+    await adminRequest("/api/admin/login", { method: "POST", body: JSON.stringify({ password }) });
     saveAdminToken(password);
+    await loadAdmin();
+  });
+}
+
+async function logoutAdmin() {
+  await guard(async () => {
+    await adminRequest("/api/admin/logout", { method: "POST", body: "{}" });
+    saveAdminToken("");
+    state.admin = null;
+    state.adminError = "";
     await loadAdmin();
   });
 }

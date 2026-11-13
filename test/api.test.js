@@ -16,8 +16,8 @@ async function withServer(fn, options) {
   }
 }
 
-async function send(base, path, { method = "GET", token, body } = {}) {
-  const headers = {};
+async function send(base, path, { method = "GET", token, body, headers: extraHeaders = {} } = {}) {
+  const headers = { ...extraHeaders };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (token) headers.authorization = `Bearer ${token}`;
   const response = await fetch(`${base}${path}`, {
@@ -350,6 +350,15 @@ test("a full table stops at eight and names are stored as text", async () => {
     assert.equal(shortPassword.status, 400);
     const setup = await send(base, "/api/admin/setup", { method: "POST", body: { password: "table-admin" } });
     assert.equal(setup.status, 201);
+    const login = await send(base, "/api/admin/login", { method: "POST", body: { password: "table-admin" } });
+    assert.equal(login.status, 200);
+    const adminCookie = login.headers.get("set-cookie");
+    assert.match(adminCookie, /Max-Age=2592000/);
+    assert.match(adminCookie, /HttpOnly/);
+    const cookieOverview = await send(base, "/api/admin/overview", {
+      headers: { cookie: adminCookie.split(";")[0] },
+    });
+    assert.equal(cookieOverview.status, 200);
     const overview = await send(base, "/api/admin/overview", { token: "table-admin" });
     assert.equal(overview.status, 200);
     assert.equal(overview.data.summary.rooms, 1);

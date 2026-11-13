@@ -29,13 +29,14 @@ function securityHeaders() {
   };
 }
 
-function send(res, status, body) {
+function send(res, status, body, extraHeaders = {}) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     ...securityHeaders(),
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(payload),
+    ...extraHeaders,
   });
   res.end(payload);
 }
@@ -86,6 +87,20 @@ function bearer(req) {
   const header = String(req.headers.authorization || "");
   const match = header.match(/^Bearer\s+([\x21-\x7e]{8,200})$/);
   return match ? match[1] : "";
+}
+
+function cookie(req, name) {
+  const header = String(req.headers.cookie || "");
+  for (const part of header.split(";")) {
+    const index = part.indexOf("=");
+    if (index < 0 || part.slice(0, index).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(index + 1).trim());
+    } catch {
+      return "";
+    }
+  }
+  return "";
 }
 
 function normalizeCode(value) {
@@ -204,8 +219,29 @@ function createApp(store) {
       return;
     }
 
+    if (pathname === "/api/admin/login" && req.method === "POST") {
+      const body = await readJson(req);
+      const password = cleanPassword(body.password);
+      if (!(await isAdmin(password))) throw new AppError(401, "口令不对");
+      const secure = process.env.VERCEL ? "; Secure" : "";
+      send(res, 200, { ok: true }, {
+        "set-cookie": `mj_admin=${encodeURIComponent(password)}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Strict${secure}`,
+      });
+      return;
+    }
+
+    if (pathname === "/api/admin/logout" && req.method === "POST") {
+      const secure = process.env.VERCEL ? "; Secure" : "";
+      send(res, 200, { ok: true }, {
+        "set-cookie": `mj_admin=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict${secure}`,
+      });
+      return;
+    }
+
     if (pathname === "/api/admin/overview" && req.method === "GET") {
-      if (!(await isAdmin(bearer(req)))) throw new AppError(401, "口令不对");
+      const headerToken = bearer(req);
+      const cookieToken = cookie(req, "mj_admin");
+      if (!(await isAdmin(headerToken)) && !(await isAdmin(cookieToken))) throw new AppError(401, "口令不对");
       send(res, 200, await store.adminOverview());
       return;
     }
