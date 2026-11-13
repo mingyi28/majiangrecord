@@ -820,6 +820,7 @@ textarea:focus { border-color: var(--cyan); }
 .admin-title h2 { margin: 0; font-size: 19px; }
 .admin-title p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .admin-title > small { color: var(--muted); }
+.admin-title-toggle { border: 0; background: transparent; padding: 0; color: inherit; text-align: left; }
 .admin-title-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .admin-title-actions small { color: var(--muted); font-size: 11px; }
 .admin-hidden-trigger {
@@ -945,7 +946,20 @@ textarea:focus { border-color: var(--cyan); }
   .screen.admin { padding-left: 14px; padding-right: 14px; }
   .admin-header h1 { font-size: 26px; }
   .admin-block { padding: 14px; }
-  .admin-hidden-trigger { opacity: 1; pointer-events: auto; transform: none; }
+  .ranking-block:hover .admin-hidden-trigger,
+  .ranking-block:focus-within .admin-hidden-trigger,
+  .rooms-block:hover .admin-hidden-trigger,
+  .rooms-block:focus-within .admin-hidden-trigger {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-3px);
+  }
+  .ranking-block.tools-open .admin-hidden-trigger,
+  .rooms-block.tools-open .admin-hidden-trigger {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-columns { grid-template-columns: 1fr; }
   .ranking-list, .admin-room-list { max-height: none; }

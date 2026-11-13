@@ -21,6 +21,7 @@ const state = {
   adminPlayerRank: 0,
   adminHideZeroRooms: false,
   adminHiddenList: "",
+  adminToolsOpen: "",
   profileHistory: null,
   profileLoading: false,
   editingProfileId: "",
@@ -1408,6 +1409,10 @@ function onClick(event) {
     state.adminOpen = "";
     state.adminPlayerRank = 0;
     paint();
+  } else if (action === "toggle-admin-tools") {
+    const kind = button.dataset.kind === "rooms" ? "rooms" : "players";
+    state.adminToolsOpen = state.adminToolsOpen === kind ? "" : kind;
+    paint();
   } else if (action === "hide-admin-player") {
     setAdminPlayerVisibility(Number(button.dataset.rank) || 0, true);
   } else if (action === "unhide-admin-player") {
@@ -1705,16 +1710,16 @@ function renderAdmin() {
           ${cards}
         </section>
         <div class="admin-columns">
-          <section class="admin-block ranking-block">
+          <section class="admin-block ranking-block${state.adminToolsOpen === "players" ? " tools-open" : ""}">
             <div class="admin-title">
-              <div><h2>天梯排行榜</h2><p>按累计总分排名，同分时胜局更多者优先</p></div>
+              <button type="button" class="admin-title-toggle" data-action="toggle-admin-tools" data-kind="players" aria-expanded="${state.adminToolsOpen === "players"}"><h2>天梯排行榜</h2><p>按累计总分排名，同分时胜局更多者优先</p></button>
               <button type="button" class="admin-hidden-trigger" data-action="open-hidden-list" data-kind="players">隐藏列表${hiddenPlayers.length ? ` ${hiddenPlayers.length}` : ""}</button>
             </div>
             ${ranking}
           </section>
-          <section class="admin-block rooms-block">
+          <section class="admin-block rooms-block${state.adminToolsOpen === "rooms" ? " tools-open" : ""}">
             <div class="admin-title">
-              <div><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></div>
+              <button type="button" class="admin-title-toggle" data-action="toggle-admin-tools" data-kind="rooms" aria-expanded="${state.adminToolsOpen === "rooms"}"><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></button>
               <div class="admin-title-actions">
                 <button type="button" class="admin-hidden-trigger" data-action="open-hidden-list" data-kind="rooms">隐藏列表${hiddenRooms.length ? ` ${hiddenRooms.length}` : ""}</button>
                 <button type="button" class="admin-filter-button${state.adminHideZeroRooms ? " active" : ""}" data-action="toggle-zero-rooms" aria-pressed="${state.adminHideZeroRooms}">过滤 0 局</button>
