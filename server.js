@@ -123,7 +123,7 @@ function staticFile(urlPath) {
     return null;
   }
   if (decoded.includes("\0")) return null;
-  const rel = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
+  const rel = decoded === "/" || decoded === "/admin" ? "index.html" : decoded.replace(/^\/+/, "");
   if (!rel) return null;
   const full = path.resolve(PUBLIC_DIR, rel);
   if (full !== PUBLIC_DIR && !full.startsWith(`${PUBLIC_DIR}${path.sep}`)) return null;

@@ -118,6 +118,11 @@ test("two phones share one running score", async () => {
     assert.equal(overview.status, 200);
     assert.equal(overview.data.summary.dissolved, 1);
     assert.equal(overview.data.summary.rounds, 1);
+    assert.equal(overview.data.leaderboard[0].name, "阿明");
+    assert.equal(overview.data.leaderboard[0].total, 10);
+    assert.equal(overview.data.leaderboard[0].wins, 1);
+    assert.equal(overview.data.leaderboard[1].name, "小李");
+    assert.equal(overview.data.leaderboard[1].total, -10);
     const room = overview.data.rooms.find((item) => item.code === code);
     assert.equal(room.players.find((player) => player.name === "阿明").total, 10);
     assert.equal(room.rounds[0].seq, 1);
@@ -202,6 +207,9 @@ test("a full table stops at eight and names are stored as text", async () => {
     const html = await fetch(`${base}/`).then((response) => response.text());
     assert.match(html, /麻将记分/);
     assert.doesNotMatch(html, /<script(?! src="\/app\.js")/);
+    const adminPage = await fetch(`${base}/admin`);
+    assert.equal(adminPage.status, 200);
+    assert.match(await adminPage.text(), /麻将记分/);
 
     const ended = await send(base, `/api/rooms/${code}/end`, { method: "POST", token: created.data.hostToken, body: {} });
     assert.equal(ended.status, 200);

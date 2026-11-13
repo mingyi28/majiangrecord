@@ -386,7 +386,6 @@ function renderHome() {
       </section>
       ${recentHtml ? `<section class="recent-section"><div class="section-title"><b>最近房间</b></div><div class="recents">${recentHtml}</div></section>` : ""}
       <p class="error">${esc(state.homeError)}</p>
-      <button type="button" class="link admin-link" data-action="admin">进入管理端</button>
     </div>
   </div>`;
 }
@@ -1119,8 +1118,7 @@ function onClick(event) {
   else if (action === "ask-disband") {
     state.dialog = "disband";
     paint();
-  } else if (action === "admin") location.hash = "#/admin";
-  else if (action === "toggle-room") {
+  } else if (action === "toggle-room") {
     state.adminOpen = state.adminOpen === button.dataset.code ? "" : button.dataset.code || "";
     paint();
   } else if (action === "admin-out") {
@@ -1207,18 +1205,32 @@ function roundLine(room, round) {
 
 function renderAdmin() {
   const summary = state.admin && state.admin.summary;
+  const leaderboard = (state.admin && state.admin.leaderboard) || [];
   const cards = summary
     ? `<div class="stats">
         ${[
-          ["房间", summary.rooms],
+          ["累计房间", summary.rooms],
           ["进行中", summary.active],
-          ["已结束", summary.ended],
+          ["已完成", summary.ended],
           ["已解散", summary.dissolved],
-          ["人次", summary.players],
-          ["对局", summary.rounds],
+          ["参赛人次", summary.players],
+          ["累计对局", summary.rounds],
         ].map(([label, value]) => `<div class="stat"><b>${esc(value)}</b><span>${label}</span></div>`).join("")}
       </div>`
     : "";
+  const ranking = leaderboard.length
+    ? `<div class="ranking-list">${leaderboard.map((player) => `
+        <article class="ranking-row">
+          <span class="rank rank-${player.rank}">${player.rank}</span>
+          <span class="avatar">${avatarSvg(player.avatar)}</span>
+          <div class="ranking-person">
+            <b>${esc(player.name)}</b>
+            <small>${player.rooms} 个房间 · ${player.rounds} 局 · ${player.wins} 胜</small>
+          </div>
+          <div class="ranking-rate"><b>${esc(`${player.winRate}%`)}</b><small>胜率</small></div>
+          <strong class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</strong>
+        </article>`).join("")}</div>`
+    : `<p class="empty-state">完成对局后，这里会出现天梯排名。</p>`;
   const rooms = (state.admin && state.admin.rooms) || [];
   const feedback = (state.admin && state.admin.feedback) || [];
   const list = rooms.length
@@ -1228,25 +1240,24 @@ function renderAdmin() {
         const rounds = open
           ? room.rounds.map((round) => `<p class="round"><b>第${round.seq}局</b><span>${esc(roundLine(room, round))}</span></p>`).join("")
           : "";
-        return `<article class="room-card">
+        return `<article class="room-card${open ? " open" : ""}">
           <header>
-            <b>${esc(room.code)}</b>
-            <span>${statusLabel(room.status)}</span>
+            <div><b>${esc(room.code)}</b><span class="status status-${esc(room.status)}">${statusLabel(room.status)}</span></div>
             <small>${esc(formatWhen(room.createdAt))}</small>
           </header>
           <ul>${people || "<li><span>还没有人坐下</span></li>"}</ul>
-          <button type="button" class="link" data-action="toggle-room" data-code="${esc(room.code)}">${room.roundCount} 局${open ? "，收起" : ""}</button>
+          <button type="button" class="room-detail-button" data-action="toggle-room" data-code="${esc(room.code)}">${room.roundCount} 局 · ${open ? "收起详情" : "查看详情"}</button>
           ${rounds}
         </article>`;
       }).join("")
-    : state.admin ? `<p class="hint">还没有牌桌记录。</p>` : "";
+    : state.admin ? `<p class="empty-state">还没有房间记录。</p>` : "";
   const feedbackList = feedback.length
-    ? `<h3 class="admin-section">意见反馈</h3>${feedback.map((item) => `
+    ? `${feedback.map((item) => `
         <article class="feedback-card">
           <header><b>${esc(item.name || "匿名")}</b><small>${esc(formatWhen(item.createdAt))}${item.roomCode ? ` · ${esc(item.roomCode)}` : ""}</small></header>
           <p>${esc(item.message)}</p>
         </article>`).join("")}`
-    : "";
+    : `<p class="empty-state">暂时没有新反馈。</p>`;
   let gate = "";
   if (!state.admin) {
     if (state.adminMode && state.adminMode.unavailable) {
@@ -1266,17 +1277,31 @@ function renderAdmin() {
     }
   }
   return `<div class="screen admin">
-    <header class="top">
-      <button type="button" class="home-link" data-action="home">返回</button>
-      <strong class="panel-title">管理</strong>
+    <header class="admin-header">
+      <div><p class="eyebrow">MAHJONG SCORE</p><h1>管理看板</h1></div>
       ${state.admin ? `<button type="button" class="link" data-action="admin-out">退出</button>` : ""}
     </header>
     <div class="body">
-      <p class="lede">每桌的分数和汇总。</p>
-      ${cards}
-      ${list}
-      ${feedbackList}
-      ${gate}
+      ${state.admin ? `
+        <section class="admin-block overview-block">
+          <div class="admin-title"><div><h2>对局概览</h2><p>房间、参赛和完成情况</p></div><small>实时汇总</small></div>
+          ${cards}
+        </section>
+        <div class="admin-columns">
+          <section class="admin-block ranking-block">
+            <div class="admin-title"><div><h2>天梯排行榜</h2><p>按累计总分排名，同分时胜局更多者优先</p></div></div>
+            ${ranking}
+          </section>
+          <section class="admin-block rooms-block">
+            <div class="admin-title"><div><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></div><small>最近 100 个</small></div>
+            <div class="admin-room-list">${list}</div>
+          </section>
+        </div>
+        <section class="admin-block feedback-block">
+          <div class="admin-title"><div><h2>意见反馈</h2><p>玩家从角色面板提交的建议</p></div></div>
+          <div class="feedback-list">${feedbackList}</div>
+        </section>
+      ` : `<section class="admin-login"><h2>管理端登录</h2><p>输入管理口令查看对局数据。</p>${gate}</section>`}
       <p class="error">${esc(state.adminError)}</p>
     </div>
   </div>`;
@@ -1312,7 +1337,9 @@ async function submitAdmin(setup, password) {
 }
 
 function route() {
-  if (location.hash === "#/admin") {
+  if (location.pathname === "/admin" || location.hash === "#/admin") {
+    if (location.hash === "#/admin") history.replaceState(null, "", "/admin");
+    document.title = "管理看板 · 麻将记分";
     stopPoll();
     state.view = "admin";
     state.dialog = "";
@@ -1320,6 +1347,7 @@ function route() {
     loadAdmin();
     return;
   }
+  document.title = "麻将记分";
   const match = location.hash.match(/^#\/r\/(\d{5})$/);
   if (!match) {
     stopPoll();

@@ -3,5 +3,8 @@
     "api/**/*.js": {
       "includeFiles": "{lib,migrations,public}/**"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/" }
+  ]
 }
