@@ -18,6 +18,8 @@ const state = {
   adminMode: null,
   adminError: "",
   adminOpen: "",
+  adminPlayerRank: 0,
+  adminHideZeroRooms: false,
   profileHistory: null,
   profileLoading: false,
   editingProfileId: "",
@@ -1223,6 +1225,12 @@ function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
+      if (state.view === "admin" && (state.adminOpen || state.adminPlayerRank)) {
+        state.adminOpen = "";
+        state.adminPlayerRank = 0;
+        paint();
+        return;
+      }
       if (state.dialog === "profile-edit") {
         closeProfileEditor();
         return;
@@ -1316,8 +1324,20 @@ function onClick(event) {
   } else if (action === "cancel-profile-edit") {
     closeProfileEditor();
   } else if (action === "confirm-end") confirmEnd();
-  else if (action === "toggle-room") {
-    state.adminOpen = state.adminOpen === button.dataset.code ? "" : button.dataset.code || "";
+  else if (action === "open-admin-room") {
+    state.adminOpen = button.dataset.code || "";
+    state.adminPlayerRank = 0;
+    paint();
+  } else if (action === "open-admin-player") {
+    state.adminPlayerRank = Number(button.dataset.rank) || 0;
+    state.adminOpen = "";
+    paint();
+  } else if (action === "close-admin-detail") {
+    state.adminOpen = "";
+    state.adminPlayerRank = 0;
+    paint();
+  } else if (action === "toggle-zero-rooms") {
+    state.adminHideZeroRooms = !state.adminHideZeroRooms;
     paint();
   } else if (action === "admin-out") {
     logoutAdmin();
@@ -1358,6 +1378,12 @@ function onSubmit(event) {
 }
 
 function onKeydown(event) {
+  if (event.key === "Escape" && state.view === "admin" && (state.adminOpen || state.adminPlayerRank)) {
+    state.adminOpen = "";
+    state.adminPlayerRank = 0;
+    paint();
+    return;
+  }
   if (event.key === "Escape" && state.dialog) {
     if (state.dialog === "profile-edit") {
       closeProfileEditor();
@@ -1403,6 +1429,74 @@ function roundLine(room, round) {
   return parts.join(" · ") || "分数没有变化";
 }
 
+function renderAdminRoomDetail(room) {
+  const people = room.players.length
+    ? room.players.map((player) => `
+        <li>
+          <span class="avatar">${avatarSvg(player.avatar)}</span>
+          <b>${esc(player.name)}</b>
+          <strong class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</strong>
+        </li>`).join("")
+    : `<li class="admin-detail-empty">还没有人坐下</li>`;
+  const rounds = room.rounds.length
+    ? room.rounds.map((round) => `
+        <p class="round">
+          <b>第${round.seq}局</b>
+          <span>${esc(roundLine(room, round))}</span>
+          ${round.editedAt ? `<em class="edited-badge">已修改</em>` : ""}
+        </p>`).join("")
+    : `<p class="empty-state">这个房间还没有对局记录。</p>`;
+  return `<div class="modal-root">
+    <div class="modal admin-detail-modal" role="dialog" aria-modal="true" aria-labelledby="admin-room-title">
+      <div class="modal-heading">
+        <div>
+          <h2 id="admin-room-title">房间 ${esc(room.code)}</h2>
+          <p>${esc(formatWhen(room.createdAt))} · ${statusLabel(room.status)} · ${room.roundCount} 局</p>
+        </div>
+        <button type="button" class="close-button" data-action="close-admin-detail" aria-label="关闭">×</button>
+      </div>
+      <h3>玩家结算</h3>
+      <ul class="admin-detail-players">${people}</ul>
+      <h3>对局记录</h3>
+      <div class="admin-detail-rounds">${rounds}</div>
+    </div>
+  </div>`;
+}
+
+function renderAdminPlayerDetail(player, rooms) {
+  const records = rooms.flatMap((room) => {
+    const matched = room.players.find((item) => item.name === player.name && item.avatar === player.avatar);
+    return matched ? [{ room, player: matched }] : [];
+  });
+  const history = records.length
+    ? records.map(({ room, player: roomPlayer }) => `
+        <article>
+          <div><b>${esc(room.code)}</b><small>${esc(formatWhen(room.createdAt))} · ${statusLabel(room.status)}</small></div>
+          <span>${room.roundCount} 局</span>
+          <strong class="${roomPlayer.total > 0 ? "up" : roomPlayer.total < 0 ? "down" : ""}">${esc(formatDelta(roomPlayer.total))}</strong>
+        </article>`).join("")
+    : `<p class="empty-state">还没有房间记录。</p>`;
+  return `<div class="modal-root">
+    <div class="modal admin-detail-modal" role="dialog" aria-modal="true" aria-labelledby="admin-player-title">
+      <div class="modal-heading">
+        <div class="admin-player-heading">
+          <span class="avatar">${avatarSvg(player.avatar)}</span>
+          <div><h2 id="admin-player-title">${esc(player.name)}</h2><p>天梯第 ${player.rank} 名</p></div>
+        </div>
+        <button type="button" class="close-button" data-action="close-admin-detail" aria-label="关闭">×</button>
+      </div>
+      <div class="admin-player-stats">
+        <div><b>${player.rooms}</b><span>房间</span></div>
+        <div><b>${player.rounds}</b><span>对局</span></div>
+        <div><b>${player.wins}</b><span>胜局</span></div>
+        <div><b>${esc(formatDelta(player.total))}</b><span>总分</span></div>
+      </div>
+      <h3>历史房间</h3>
+      <div class="admin-player-history">${history}</div>
+    </div>
+  </div>`;
+}
+
 function renderAdmin() {
   const summary = state.admin && state.admin.summary;
   const leaderboard = (state.admin && state.admin.leaderboard) || [];
@@ -1420,7 +1514,7 @@ function renderAdmin() {
     : "";
   const ranking = leaderboard.length
     ? `<div class="ranking-list">${leaderboard.map((player) => `
-        <article class="ranking-row">
+        <button type="button" class="ranking-row" data-action="open-admin-player" data-rank="${player.rank}">
           <span class="rank rank-${player.rank}">${player.rank}</span>
           <span class="avatar">${avatarSvg(player.avatar)}</span>
           <div class="ranking-person">
@@ -1429,28 +1523,24 @@ function renderAdmin() {
           </div>
           <div class="ranking-rate"><b>${esc(`${player.winRate}%`)}</b><small>胜率</small></div>
           <strong class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</strong>
-        </article>`).join("")}</div>`
+        </button>`).join("")}</div>`
     : `<p class="empty-state">完成对局后，这里会出现天梯排名。</p>`;
   const rooms = (state.admin && state.admin.rooms) || [];
+  const visibleRooms = state.adminHideZeroRooms ? rooms.filter((room) => room.roundCount > 0) : rooms;
   const feedback = (state.admin && state.admin.feedback) || [];
-  const list = rooms.length
-    ? rooms.map((room) => {
-        const open = state.adminOpen === room.code;
+  const list = visibleRooms.length
+    ? visibleRooms.map((room) => {
         const people = room.players.map((player) => `<li><span>${esc(player.name)}</span><b class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</b></li>`).join("");
-        const rounds = open
-          ? room.rounds.map((round) => `<p class="round"><b>第${round.seq}局</b><span>${esc(roundLine(room, round))}</span>${round.editedAt ? `<em class="edited-badge">已修改</em>` : ""}</p>`).join("")
-          : "";
-        return `<article class="room-card${open ? " open" : ""}">
+        return `<article class="room-card">
           <header>
             <div><b>${esc(room.code)}</b><span class="status status-${esc(room.status)}">${statusLabel(room.status)}</span></div>
             <small>${esc(formatWhen(room.createdAt))}</small>
           </header>
           <ul>${people || "<li><span>还没有人坐下</span></li>"}</ul>
-          <button type="button" class="room-detail-button" data-action="toggle-room" data-code="${esc(room.code)}">${room.roundCount} 局 · ${open ? "收起详情" : "查看详情"}</button>
-          ${rounds}
+          <button type="button" class="room-detail-button" data-action="open-admin-room" data-code="${esc(room.code)}">${room.roundCount} 局 · 查看详情</button>
         </article>`;
       }).join("")
-    : state.admin ? `<p class="empty-state">还没有房间记录。</p>` : "";
+    : state.admin ? `<p class="empty-state">${state.adminHideZeroRooms ? "没有包含对局的房间。" : "还没有房间记录。"}</p>` : "";
   const feedbackList = feedback.length
     ? `${feedback.map((item) => `
         <article class="feedback-card">
@@ -1470,6 +1560,13 @@ function renderAdmin() {
       </form>`;
     }
   }
+  const selectedRoom = rooms.find((room) => room.code === state.adminOpen);
+  const selectedPlayer = leaderboard.find((player) => player.rank === state.adminPlayerRank);
+  const detailModal = selectedRoom
+    ? renderAdminRoomDetail(selectedRoom)
+    : selectedPlayer
+    ? renderAdminPlayerDetail(selectedPlayer, rooms)
+    : "";
   return `<div class="screen admin">
     <header class="admin-header">
       <div><p class="eyebrow">MAHJONG SCORE</p><h1>管理看板</h1></div>
@@ -1487,7 +1584,13 @@ function renderAdmin() {
             ${ranking}
           </section>
           <section class="admin-block rooms-block">
-            <div class="admin-title"><div><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></div><small>最近 100 个</small></div>
+            <div class="admin-title">
+              <div><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></div>
+              <div class="admin-title-actions">
+                <button type="button" class="admin-filter-button${state.adminHideZeroRooms ? " active" : ""}" data-action="toggle-zero-rooms" aria-pressed="${state.adminHideZeroRooms}">过滤 0 局</button>
+                <small>${visibleRooms.length} / ${rooms.length}</small>
+              </div>
+            </div>
             <div class="admin-room-list">${list}</div>
           </section>
         </div>
@@ -1498,7 +1601,7 @@ function renderAdmin() {
       ` : `<section class="admin-login"><h2>管理端登录</h2><p>输入管理口令查看对局数据。</p>${gate}</section>`}
       <p class="error">${esc(state.adminError)}</p>
     </div>
-  </div>`;
+  </div>${detailModal}`;
 }
 
 async function loadAdmin() {

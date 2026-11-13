@@ -779,6 +779,19 @@ textarea:focus { border-color: var(--cyan); }
 .admin-title h2 { margin: 0; font-size: 19px; }
 .admin-title p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .admin-title > small { color: var(--muted); }
+.admin-title-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.admin-title-actions small { color: var(--muted); font-size: 11px; }
+.admin-filter-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  padding: 5px 10px;
+  color: var(--cyan-deep);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.admin-filter-button.active { border-color: var(--cyan); background: #e7f8f8; }
 .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .stat { background: #effbfb; border-radius: 16px; padding: 13px 8px; text-align: center; }
 .stat b { display: block; font-size: 24px; color: var(--cyan-deep); }
@@ -786,7 +799,8 @@ textarea:focus { border-color: var(--cyan); }
 .admin-columns { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
 .ranking-list, .admin-room-list, .feedback-list { display: flex; flex-direction: column; gap: 8px; }
 .ranking-list, .admin-room-list { max-height: 560px; overflow: auto; padding-right: 3px; }
-.ranking-row { display: grid; grid-template-columns: 30px 42px minmax(0, 1fr) 54px 54px; align-items: center; gap: 9px; padding: 9px; background: #f6fcfc; border-radius: 16px; }
+.ranking-row { width: 100%; display: grid; grid-template-columns: 30px 42px minmax(0, 1fr) 54px 54px; align-items: center; gap: 9px; border: 0; padding: 9px; background: #f6fcfc; border-radius: 16px; color: var(--ink); text-align: left; }
+.ranking-row:hover { background: #eaf8f8; }
 .ranking-row .avatar { width: 42px; height: 42px; }
 .rank { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); font-weight: 900; }
 .rank-1 { background: #fff0b8; color: #9d6c00; }
@@ -812,6 +826,31 @@ textarea:focus { border-color: var(--cyan); }
 .room-card ul { list-style: none; margin: 8px 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; }
 .room-card li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
 .room-detail-button { width: 100%; min-height: 34px; border: 0; border-radius: 12px; background: #eaf8f8; color: var(--cyan-deep); font-weight: 800; }
+.admin-detail-modal { width: min(620px, 100%); }
+.admin-detail-modal h3 { margin: 18px 0 8px; font-size: 15px; }
+.admin-detail-modal .modal-heading > div > p { margin-top: 3px; font-size: 12px; }
+.admin-detail-players { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.admin-detail-players li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; border-radius: 14px; background: #f6fcfc; padding: 7px 9px; }
+.admin-detail-players .avatar { width: 34px; height: 34px; }
+.admin-detail-players b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-detail-players strong.up, .admin-player-history strong.up { color: #e35f77; }
+.admin-detail-players strong.down, .admin-player-history strong.down { color: #537078; }
+.admin-detail-players .admin-detail-empty { display: block; grid-column: 1 / -1; color: var(--muted); text-align: center; }
+.admin-detail-rounds { max-height: min(42dvh, 360px); overflow-y: auto; padding-right: 3px; }
+.admin-player-heading { display: flex; align-items: center; gap: 10px; }
+.admin-player-heading .avatar { width: 48px; height: 48px; }
+.admin-player-heading p { margin-top: 2px; }
+.admin-player-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.admin-player-stats > div { border-radius: 14px; background: #effbfb; padding: 10px 6px; text-align: center; }
+.admin-player-stats b, .admin-player-stats span { display: block; }
+.admin-player-stats b { color: var(--cyan-deep); font-size: 19px; }
+.admin-player-stats span { color: var(--muted); font-size: 11px; }
+.admin-player-history { max-height: min(42dvh, 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 7px; padding-right: 3px; }
+.admin-player-history article { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-radius: 14px; background: #f6fcfc; padding: 9px 11px; }
+.admin-player-history article div { min-width: 0; }
+.admin-player-history article b, .admin-player-history article small { display: block; }
+.admin-player-history article small { margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-player-history article > span { color: var(--muted); font-size: 12px; }
 .feedback-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .feedback-card { background: #f8fdfd; border-radius: 16px; padding: 12px; }
 .feedback-card header { display: flex; justify-content: space-between; gap: 8px; }
@@ -841,6 +880,9 @@ textarea:focus { border-color: var(--cyan); }
   .ranking-row .avatar { width: 38px; height: 38px; }
   .ranking-rate { display: none; }
   .room-card ul, .feedback-list { grid-template-columns: 1fr; }
+  .admin-detail-players { grid-template-columns: 1fr; }
+  .admin-player-history article { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-player-history article > span { display: none; }
   @keyframes modal-in {
     from { opacity: 0; transform: translateY(24px); }
     to { opacity: 1; transform: translateY(0); }
