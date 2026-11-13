@@ -279,10 +279,7 @@ function createApp(store) {
         const saved = await store.addRound(
           code,
           {
-            kind: body.kind,
-            winnerId: body.winnerId,
-            payerId: body.payerId,
-            points: body.points,
+            kind: "award",
             deltas: body.deltas,
             note: cleanNote(body.note),
           },

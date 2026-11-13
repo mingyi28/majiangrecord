@@ -53,13 +53,13 @@ test("two phones share one running score", async () => {
       method: "POST",
       token: ming.data.token,
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: 10, [li.data.player.id]: -10 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 10, [li.data.player.id]: 0 },
       },
     });
     assert.equal(first.status, 201);
     const afterFirst = Object.fromEntries(first.data.room.players.map((player) => [player.name, player.total]));
-    assert.deepEqual(afterFirst, { 阿明: 10, 小李: -10 });
+    assert.deepEqual(afterFirst, { 阿明: 10, 小李: 0 });
 
     const seenByLi = await send(base, `/api/rooms/${code}`);
     assert.equal(seenByLi.data.room.players.find((player) => player.name === "阿明").total, 10);
@@ -68,13 +68,13 @@ test("two phones share one running score", async () => {
       method: "POST",
       token: li.data.token,
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: -6, [li.data.player.id]: 6 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 0, [li.data.player.id]: 6 },
       },
     });
     assert.equal(second.status, 201);
     const totals = Object.fromEntries(second.data.room.players.map((player) => [player.name, player.total]));
-    assert.deepEqual(totals, { 阿明: 4, 小李: -4 });
+    assert.deepEqual(totals, { 阿明: 10, 小李: 6 });
 
     const latest = second.data.room.rounds[0];
     const undone = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
@@ -85,6 +85,17 @@ test("two phones share one running score", async () => {
     assert.equal(undone.data.room.rounds.length, 1);
     assert.equal(undone.data.room.players.find((player) => player.name === "阿明").total, 10);
 
+    const negative = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: ming.data.token,
+      body: {
+        kind: "award",
+        deltas: { [ming.data.player.id]: -1, [li.data.player.id]: 0 },
+      },
+    });
+    assert.equal(negative.status, 400);
+    assert.match(negative.data.error, /不能减少/);
+
     const ended = await send(base, `/api/rooms/${code}/end`, { method: "POST", token: host, body: {} });
     assert.equal(ended.status, 200);
     assert.equal(ended.data.room.status, "ended");
@@ -92,8 +103,8 @@ test("two phones share one running score", async () => {
       method: "POST",
       token: host,
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: -1 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: 0 },
       },
     });
     assert.equal(blocked.status, 409);
@@ -107,8 +118,8 @@ test("two phones share one running score", async () => {
       method: "POST",
       token: host,
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: -1 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 1, [li.data.player.id]: 0 },
       },
     });
     assert.equal(scoredAgain.status, 409);
@@ -122,7 +133,7 @@ test("two phones share one running score", async () => {
     assert.equal(overview.data.leaderboard[0].total, 10);
     assert.equal(overview.data.leaderboard[0].wins, 1);
     assert.equal(overview.data.leaderboard[1].name, "小李");
-    assert.equal(overview.data.leaderboard[1].total, -10);
+    assert.equal(overview.data.leaderboard[1].total, 0);
     const room = overview.data.rooms.find((item) => item.code === code);
     assert.equal(room.players.find((player) => player.name === "阿明").total, 10);
     assert.equal(room.rounds[0].seq, 1);
@@ -150,8 +161,8 @@ test("scoring requires a seat token from this room", async () => {
     const missing = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: 2, placeholder: -2 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 2, placeholder: 0 },
       },
     });
     assert.equal(missing.status, 401);
@@ -160,8 +171,8 @@ test("scoring requires a seat token from this room", async () => {
       method: "POST",
       token: outsider.data.token,
       body: {
-        kind: "manual",
-        deltas: { [ming.data.player.id]: 2, placeholder: -2 },
+        kind: "award",
+        deltas: { [ming.data.player.id]: 2, placeholder: 0 },
       },
     });
     assert.equal(foreign.status, 401);

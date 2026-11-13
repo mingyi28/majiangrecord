@@ -301,10 +301,10 @@ function toast(message) {
 
 function parseScore(raw) {
   const text = String(raw ?? "").trim();
-  if (text === "" || text === "-" || text === "+") return { ok: true, value: 0, empty: true };
-  if (!/^[+-]?\d+$/.test(text)) return { ok: false, value: 0, empty: false };
+  if (text === "") return { ok: true, value: 0, empty: true };
+  if (!/^\d+$/.test(text)) return { ok: false, value: 0, empty: false };
   const value = Number(text);
-  if (!Number.isInteger(value) || Math.abs(value) > 1000000) return { ok: false, value: 0, empty: false };
+  if (!Number.isInteger(value) || value < 0 || value > 1000000) return { ok: false, value: 0, empty: false };
   return { ok: true, value, empty: false };
 }
 
@@ -321,11 +321,10 @@ function scoreState() {
     sum += parsed.value;
     if (!parsed.empty && parsed.value !== 0) any = true;
   }
-  let hint = "给每人填这一局的分数";
-  if (bad) hint = "请填整数";
-  else if (any && sum !== 0) hint = `合计 ${formatDelta(sum)}`;
-  else if (any) hint = "合计 0";
-  return { ok: !bad && any && sum === 0 && players.length >= 2, deltas, hint };
+  let hint = "给至少一人增加分数";
+  if (bad) hint = "只能输入 0 或正整数";
+  else if (any) hint = `本局共加 ${sum} 分`;
+  return { ok: !bad && any && players.length >= 2, deltas, hint };
 }
 
 function updateSum() {
@@ -416,13 +415,8 @@ function renderPlayer(player) {
   const wind = WINDS[(Math.max(player.seat, 1) - 1) % WINDS.length];
   const leader = leaderId() === player.id ? " leader" : "";
   const totalClass = player.total > 0 ? "up" : player.total < 0 ? "down" : "flat";
-  const score = state.panel === "record"
-    ? `<div class="score-field">
-        <button type="button" class="sign" data-action="flip" data-player="${esc(player.id)}" aria-label="正负切换">−</button>
-        <input class="score-input" inputmode="text" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" aria-label="${esc(player.name)} 这一局的分数">
-      </div>`
-    : `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
-  const edit = state.panel !== "record" && state.room.status === "active" && canManage()
+  const score = `<b class="total ${totalClass}">${esc(formatDelta(player.total))}</b>`;
+  const edit = state.room.status === "active" && canManage()
     ? `<button type="button" class="edit" data-action="edit" data-player="${esc(player.id)}" aria-label="修改${esc(player.name)}">改</button>`
     : "";
   return `<li class="player${leader}">
@@ -438,7 +432,7 @@ function renderPlayer(player) {
 
 function renderHistory() {
   const rounds = state.room.rounds || [];
-  if (!rounds.length) return `<div class="history"><p class="hint">还没有对局。记一局时，给每人填上这一局的增减。</p></div>`;
+  if (!rounds.length) return `<div class="history"><p class="hint">还没有对局。记一局时，给得分的人直接加分。</p></div>`;
   const undo = state.room.status !== "ended" && canManage()
     ? `<button type="button" class="link" data-action="undo">${state.undoArmed ? "确定撤销" : "撤销上一局"}</button>`
     : "";
@@ -452,11 +446,6 @@ function renderHistory() {
 }
 
 function renderDock() {
-  if (state.panel === "record") {
-    return `<button type="button" class="btn ghost" data-action="cancel-record">取消</button>
-      <p id="sum" class="sum">给每人填这一局的分数</p>
-      <button type="button" class="btn primary" data-action="commit" disabled>记下</button>`;
-  }
   if (state.room.status === "dissolved") return `<p class="ended">这桌已经解散，记录留在管理端</p>`;
   if (state.room.status === "ended") return `<p class="ended">这桌已经结束，总分留在这里</p>`;
   const seated = [...localIds()].some((id) => state.room.players.some((player) => player.id === id));
@@ -498,7 +487,7 @@ function renderTable() {
     </div>
     <div class="body">
       <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
-      ${state.panel === "record" ? "" : renderHistory()}
+      ${renderHistory()}
     </div>
     <div class="dock">${renderDock()}</div>
   </div>`;
@@ -558,6 +547,29 @@ function renderRoleModal() {
 }
 
 function renderModal() {
+  if (state.dialog === "record") {
+    const parsed = scoreState();
+    return `<div class="modal-root">
+      <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
+        <div class="modal-heading">
+          <div><h2 id="score-title">记一局</h2><p>只填写本局增加的分数，空着就是 0。</p></div>
+          <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
+        </div>
+        <div class="score-list">${state.room.players.map((player) => `
+          <label class="score-row">
+            <span class="avatar">${avatarSvg(player.avatar)}</span>
+            <span class="score-person"><b>${esc(player.name)}</b><small>当前 ${formatDelta(player.total)}</small></span>
+            <span class="score-box"><i>＋</i><input class="score-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" placeholder="0" aria-label="给${esc(player.name)}增加的分数"></span>
+          </label>`).join("")}
+        </div>
+        <p id="sum" class="${parsed.ok ? "sum ok" : "sum"}">${esc(parsed.hint)}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
+          <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>记下这局</button>
+        </div>
+      </div>
+    </div>`;
+  }
   if (state.dialog === "create") {
     return renderIdentityEditor({
       title: "开房间",
@@ -619,7 +631,7 @@ function paint() {
   const app = document.querySelector("#app");
   const view = state.view === "admin" ? renderAdmin() : state.view === "home" ? `${renderHome()}${renderModal()}` : `${renderTable()}${renderModal()}`;
   app.innerHTML = view;
-  if (state.panel === "record") updateSum();
+  if (state.dialog === "record") updateSum();
 }
 
 async function guard(fn) {
@@ -715,21 +727,21 @@ async function refreshRoom() {
     state.room = data.room;
     const nextIds = data.room.players.map((player) => player.id).join();
     const nextRound = data.room.rounds[0]?.id || "";
-    if ((data.room.status === "ended" || data.room.status === "dissolved") && state.panel === "record") {
-      state.panel = null;
+    if ((data.room.status === "ended" || data.room.status === "dissolved") && state.dialog === "record") {
+      state.dialog = "";
       state.scores = {};
       paint();
       return;
     }
-    if (state.panel === "sit" || state.panel === "edit" || state.dialog) return;
-    if (state.panel === "record") {
-      if (previousIds === nextIds && previousStatus === data.room.status) return;
+    if (state.dialog === "record") {
+      if (previousIds === nextIds && previousRound === nextRound && previousStatus === data.room.status) return;
       for (const player of data.room.players) {
         if (state.scores[player.id] == null) state.scores[player.id] = "";
       }
       paint();
       return;
     }
+    if (state.panel === "sit" || state.panel === "edit" || state.dialog) return;
     if (previousIds === nextIds && previousRound === nextRound && previousStatus === data.room.status) return;
     paint();
   } catch {
@@ -814,13 +826,11 @@ function openRecord() {
     toast("至少两位才能记分");
     return;
   }
-  state.panel = "record";
-  state.dialog = "";
+  state.dialog = "record";
   state.scores = {};
   for (const player of state.room.players) state.scores[player.id] = "";
   paint();
-  const input = document.querySelector(".score-input");
-  if (input) input.focus();
+  focusSoon(".score-input");
 }
 
 async function commitScores() {
@@ -832,10 +842,10 @@ async function commitScores() {
   await guard(async () => {
     const data = await request(`/api/rooms/${state.code}/rounds`, {
       method: "POST",
-      body: JSON.stringify({ kind: "manual", deltas: parsed.deltas }),
+      body: JSON.stringify({ kind: "award", deltas: parsed.deltas }),
     });
     state.room = data.room;
-    state.panel = null;
+    state.dialog = "";
     state.scores = {};
     remember(data.room);
     paint();
@@ -1052,7 +1062,7 @@ function onClick(event) {
     paint();
     const input = document.querySelector("#seat-name");
     if (input) input.focus();
-  } else if (action === "close-panel" || action === "cancel-record") {
+  } else if (action === "close-panel") {
     state.panel = null;
     state.scores = {};
     paint();
@@ -1073,15 +1083,7 @@ function onClick(event) {
     state.pickedAvatar = player.avatar;
     paint();
   } else if (action === "open-record") openRecord();
-  else if (action === "flip") {
-    const id = button.dataset.player;
-    const raw = String(state.scores[id] || "");
-    const next = raw.startsWith("-") ? raw.slice(1) : raw === "" ? "-" : `-${raw.replace(/^\+/, "")}`;
-    state.scores[id] = next;
-    const input = document.querySelector(`.score-input[data-player="${CSS.escape(id)}"]`);
-    if (input) input.value = next;
-    updateSum();
-  } else if (action === "commit") commitScores();
+  else if (action === "commit") commitScores();
   else if (action === "confirm-create") createRoom();
   else if (action === "edit-profile") {
     prepareIdentity();
@@ -1141,7 +1143,7 @@ function onInput(event) {
   }
   if (event.target.classList.contains("score-input")) {
     const id = event.target.dataset.player;
-    let value = event.target.value.replace(/[^\d+-]/g, "").replace(/(?!^)[+-]/g, "").slice(0, 8);
+    const value = event.target.value.replace(/\D/g, "").slice(0, 7);
     if (value !== event.target.value) event.target.value = value;
     state.scores[id] = value;
     updateSum();

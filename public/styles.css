@@ -386,6 +386,32 @@ input:focus { border-color: var(--cyan); }
   font-weight: 800;
 }
 
+.score-modal { width: min(380px, 100%); }
+.score-modal .modal-heading p { margin-top: 4px; font-size: 13px; }
+.score-list { display: flex; flex-direction: column; gap: 8px; max-height: min(48dvh, 420px); margin-top: 16px; overflow: auto; padding: 2px; }
+.score-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  border-radius: 16px;
+  background: #f5fbfb;
+  padding: 7px 9px;
+  color: var(--ink);
+}
+.score-row .avatar { width: 44px; height: 44px; }
+.score-person { min-width: 0; }
+.score-person b, .score-person small { display: block; }
+.score-person b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.score-person small { margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.score-box { display: flex; align-items: center; border: 1.5px solid var(--line); border-radius: 14px; background: white; overflow: hidden; }
+.score-box:focus-within { border-color: var(--cyan); }
+.score-box i { padding-left: 9px; color: var(--cyan-deep); font-style: normal; font-size: 18px; }
+.score-box .score-input { width: 76px; height: 40px; border: 0; border-radius: 0; padding: 0 8px 0 3px; text-align: right; font-size: 17px; }
+.score-modal > .sum { margin: 12px 0 0; text-align: center; font-weight: 800; }
+.score-modal > .sum.ok { color: var(--cyan-deep); }
+
 .history {
   flex: 1;
   min-height: 0;
