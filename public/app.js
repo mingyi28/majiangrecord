@@ -1297,10 +1297,15 @@ function onClick(event) {
   }
   const action = button.dataset.action;
   if (action === "create") {
-    prepareIdentity();
-    state.dialog = "create";
-    paint();
-    focusSoon("#identity-name");
+    const profile = activeProfile();
+    prepareIdentity(profile);
+    if (profile) {
+      createRoom();
+    } else {
+      state.dialog = "create";
+      paint();
+      focusSoon("#identity-name");
+    }
   }
   else if (action === "open") openRoom(button.dataset.code || "");
   else if (action === "home") {
