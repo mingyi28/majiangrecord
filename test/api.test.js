@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const { createApp } = require("../server");
 const { createMemoryStore } = require("../lib/memory-store");
 
-async function withServer(fn) {
-  const store = createMemoryStore();
+async function withServer(fn, options) {
+  const store = createMemoryStore(undefined, options);
   await store.ready();
   const server = createApp(store);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -30,6 +30,7 @@ async function send(base, path, { method = "GET", token, body } = {}) {
 }
 
 test("two phones share one running score", async () => {
+  let clock = Date.now();
   await withServer(async (base) => {
     const created = await send(base, "/api/rooms", { method: "POST", body: {} });
     assert.equal(created.status, 201);
@@ -75,15 +76,66 @@ test("two phones share one running score", async () => {
     assert.equal(second.status, 201);
     const totals = Object.fromEntries(second.data.room.players.map((player) => [player.name, player.total]));
     assert.deepEqual(totals, { 阿明: 6, 小李: 10 });
+    assert.equal(second.data.room.rounds.length, 1);
+    assert.equal(second.data.room.rounds[0].entries.length, 2);
 
-    const latest = second.data.room.rounds[0];
+    clock += 61_000;
+    const nextRound = await send(base, `/api/rooms/${code}/rounds`, {
+      method: "POST",
+      token: ming.data.token,
+      body: {
+        kind: "award",
+        deltas: { [ming.data.player.id]: 0, [li.data.player.id]: 4 },
+      },
+    });
+    assert.equal(nextRound.status, 201);
+    assert.equal(nextRound.data.room.rounds.length, 2);
+
+    const firstRound = nextRound.data.room.rounds.find((round) => round.seq === 1);
+    const edited = await send(base, `/api/rooms/${code}/rounds/${firstRound.id}`, {
+      method: "PATCH",
+      token: ming.data.token,
+      body: {
+        kind: "award",
+        deltas: { [ming.data.player.id]: 0, [li.data.player.id]: 15 },
+      },
+    });
+    assert.equal(edited.status, 200);
+    assert.ok(edited.data.room.rounds.find((round) => round.id === firstRound.id).editedAt);
+    assert.deepEqual(
+      Object.fromEntries(edited.data.room.players.map((player) => [player.name, player.total])),
+      { 阿明: 6, 小李: 19 }
+    );
+
+    const cleared = await send(base, `/api/rooms/${code}/rounds/${firstRound.id}`, {
+      method: "PATCH",
+      token: ming.data.token,
+      body: {
+        kind: "award",
+        deltas: { [ming.data.player.id]: 0, [li.data.player.id]: 0 },
+      },
+    });
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.data.room.players.find((player) => player.name === "小李").total, 4);
+
+    const restored = await send(base, `/api/rooms/${code}/rounds/${firstRound.id}`, {
+      method: "PATCH",
+      token: ming.data.token,
+      body: {
+        kind: "award",
+        deltas: { [ming.data.player.id]: 0, [li.data.player.id]: 15 },
+      },
+    });
+    assert.equal(restored.status, 200);
+
+    const latest = restored.data.room.rounds.find((round) => round.seq === 2);
     const undone = await send(base, `/api/rooms/${code}/rounds/${latest.id}`, {
       method: "DELETE",
       token: host,
     });
     assert.equal(undone.status, 200);
     assert.equal(undone.data.room.rounds.length, 1);
-    assert.equal(undone.data.room.players.find((player) => player.name === "小李").total, 10);
+    assert.equal(undone.data.room.players.find((player) => player.name === "小李").total, 15);
 
     const negative = await send(base, `/api/rooms/${code}/rounds`, {
       method: "POST",
@@ -141,14 +193,15 @@ test("two phones share one running score", async () => {
     assert.equal(overview.data.summary.dissolved, 1);
     assert.equal(overview.data.summary.rounds, 1);
     assert.equal(overview.data.leaderboard[0].name, "小李");
-    assert.equal(overview.data.leaderboard[0].total, 10);
+    assert.equal(overview.data.leaderboard[0].total, 15);
     assert.equal(overview.data.leaderboard[0].wins, 1);
     assert.equal(overview.data.leaderboard[1].name, "阿明");
-    assert.equal(overview.data.leaderboard[1].total, 0);
+    assert.equal(overview.data.leaderboard[1].total, 6);
     const room = overview.data.rooms.find((item) => item.code === code);
-    assert.equal(room.players.find((player) => player.name === "小李").total, 10);
+    assert.equal(room.players.find((player) => player.name === "小李").total, 15);
     assert.equal(room.rounds[0].seq, 1);
-  });
+    assert.ok(room.rounds[0].editedAt);
+  }, { now: () => clock });
 });
 
 test("scoring requires a seat token from this room", async () => {

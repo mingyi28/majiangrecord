@@ -291,6 +291,24 @@ function createApp(store) {
       }
 
       const roundMatch = rest.match(/^\/rounds\/([^/]+)$/);
+      if (req.method === "PATCH" && roundMatch) {
+        const roundId = roundMatch[1];
+        if (!UUID.test(roundId)) throw new AppError(404, "找不到这一局");
+        const auth = await requireAuth(code, bearer(req));
+        if (!auth.playerId) throw new AppError(403, "请先以自己的角色坐下再修改");
+        const body = await readJson(req);
+        send(res, 200, await store.updateRound(
+          code,
+          roundId,
+          {
+            kind: "award",
+            deltas: body.deltas,
+            note: cleanNote(body.note),
+          },
+          auth.playerId
+        ));
+        return;
+      }
       if (req.method === "DELETE" && roundMatch) {
         const roundId = roundMatch[1];
         if (!UUID.test(roundId)) throw new AppError(404, "找不到这一局");

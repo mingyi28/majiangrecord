@@ -450,6 +450,25 @@ input:focus { border-color: var(--cyan); }
 
 .round b { flex: none; color: var(--cyan); }
 .round span { min-width: 0; }
+.round-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.round-button:active { background: var(--cyan-soft); }
+.edited-badge {
+  flex: none;
+  margin-left: auto;
+  border-radius: 999px;
+  background: #fff0d7;
+  padding: 2px 7px;
+  color: #a96619;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
 
 .panel-title { margin: 0; font-size: 18px; }
 

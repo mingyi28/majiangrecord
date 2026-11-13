@@ -44,6 +44,10 @@ test("award entry only adds points", () => {
     () => settle({ kind: "award", players, deltas: { a: 0, b: 0, c: 0, d: 0 } }),
     /还没有分数/
   );
+  assert.deepEqual(
+    settle({ kind: "award", players, actorId: "a", allowEmpty: true, deltas: { a: 0, b: 0, c: 0, d: 0 } }).deltas,
+    { a: 0, b: 0, c: 0, d: 0 }
+  );
 });
 
 test("draw keeps every score unchanged", () => {

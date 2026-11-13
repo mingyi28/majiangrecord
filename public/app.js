@@ -11,6 +11,7 @@ const state = {
   pickedAvatar: "",
   draftName: "",
   scores: {},
+  editingRoundId: "",
   dialog: "",
   admin: null,
   adminMode: null,
@@ -322,6 +323,7 @@ function parseScore(raw) {
 function scoreState() {
   const players = state.room?.players || [];
   const selfId = currentPlayerId();
+  const editing = Boolean(state.editingRoundId);
   let sum = 0;
   let any = false;
   let bad = false;
@@ -340,7 +342,8 @@ function scoreState() {
   let hint = "给至少一人增加分数";
   if (bad) hint = "只能输入 0 或正整数";
   else if (any) hint = `本局共加 ${sum} 分`;
-  return { ok: Boolean(selfId) && !bad && any && players.length >= 2, deltas, hint };
+  else if (editing) hint = "保存后会清空你在本局的记录";
+  return { ok: Boolean(selfId) && !bad && (any || editing) && players.length >= 2, deltas, hint };
 }
 
 function updateSum() {
@@ -456,7 +459,11 @@ function renderHistory() {
     const parts = Object.entries(round.deltas || {})
       .filter(([, delta]) => delta)
       .map(([id, delta]) => `${playerName(id)} ${formatDelta(delta)}`);
-    return `<p class="round"><b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span></p>`;
+    const edited = round.editedAt ? `<em class="edited-badge">已修改</em>` : "";
+    const content = `<b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span>${edited}`;
+    return state.room.status === "active" && currentPlayerId()
+      ? `<button type="button" class="round round-button" data-action="edit-round" data-round="${esc(round.id)}">${content}</button>`
+      : `<p class="round">${content}</p>`;
   }).join("");
   return `<div class="history"><div class="history-head"><span>已经记下</span>${undo}</div>${lines}</div>`;
 }
@@ -570,10 +577,11 @@ function renderModal() {
     const parsed = scoreState();
     const selfId = currentPlayerId();
     const otherPlayers = state.room.players.filter((player) => player.id !== selfId);
+    const editingRound = state.room.rounds.find((round) => round.id === state.editingRoundId);
     return `<div class="modal-root">
       <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
         <div class="modal-heading">
-          <div><h2 id="score-title">记一局</h2><p>给其他人增加分数，不能给自己加分。</p></div>
+          <div><h2 id="score-title">${editingRound ? `修改第${editingRound.seq}局` : "记一局"}</h2><p>给其他人增加分数，不能给自己加分。</p></div>
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
         <div class="score-list">${otherPlayers.map((player) => `
@@ -586,7 +594,7 @@ function renderModal() {
         <p id="sum" class="${parsed.ok ? "sum ok" : "sum"}">${esc(parsed.hint)}</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
-          <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>记下这局</button>
+          <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>${editingRound ? "保存修改" : "记下这局"}</button>
         </div>
       </div>
     </div>`;
@@ -743,19 +751,22 @@ async function refreshRoom() {
   try {
     const data = await request(`/api/rooms/${state.code}`);
     const previousIds = (state.room?.players || []).map((player) => player.id).join();
-    const previousRound = state.room?.rounds?.[0]?.id || "";
+    const previousRound = state.room?.rounds?.[0];
+    const previousRoundKey = previousRound ? `${previousRound.id}:${previousRound.updatedAt || previousRound.createdAt}` : "";
     const previousStatus = state.room?.status;
     state.room = data.room;
     const nextIds = data.room.players.map((player) => player.id).join();
-    const nextRound = data.room.rounds[0]?.id || "";
+    const nextRound = data.room.rounds[0];
+    const nextRoundKey = nextRound ? `${nextRound.id}:${nextRound.updatedAt || nextRound.createdAt}` : "";
     if ((data.room.status === "ended" || data.room.status === "dissolved") && state.dialog === "record") {
       state.dialog = "";
+      state.editingRoundId = "";
       state.scores = {};
       paint();
       return;
     }
     if (state.dialog === "record") {
-      if (previousIds === nextIds && previousRound === nextRound && previousStatus === data.room.status) return;
+      if (previousIds === nextIds && previousRoundKey === nextRoundKey && previousStatus === data.room.status) return;
       for (const player of data.room.players) {
         if (state.scores[player.id] == null) state.scores[player.id] = "";
       }
@@ -763,7 +774,7 @@ async function refreshRoom() {
       return;
     }
     if (state.panel === "sit" || state.panel === "edit" || state.dialog) return;
-    if (previousIds === nextIds && previousRound === nextRound && previousStatus === data.room.status) return;
+    if (previousIds === nextIds && previousRoundKey === nextRoundKey && previousStatus === data.room.status) return;
     paint();
   } catch {
     toast("没有连上牌桌");
@@ -842,7 +853,7 @@ async function removePlayer() {
   });
 }
 
-function openRecord() {
+function openRecord(roundId = "") {
   if ((state.room?.players.length || 0) < 2) {
     toast("至少两位才能记分");
     return;
@@ -852,8 +863,17 @@ function openRecord() {
     return;
   }
   state.dialog = "record";
+  state.editingRoundId = roundId;
   state.scores = {};
   for (const player of state.room.players) state.scores[player.id] = "";
+  if (roundId) {
+    const selfId = currentPlayerId();
+    const round = state.room.rounds.find((item) => item.id === roundId);
+    const entry = round?.entries?.find((item) => item.actorId === selfId);
+    for (const [playerId, delta] of Object.entries(entry?.deltas || {})) {
+      if (playerId !== selfId && delta) state.scores[playerId] = String(delta);
+    }
+  }
   paint();
   focusSoon(".score-input");
 }
@@ -861,21 +881,23 @@ function openRecord() {
 async function commitScores() {
   const parsed = scoreState();
   const selfId = currentPlayerId();
+  const roundId = state.editingRoundId;
   if (!parsed.ok) {
     toast(parsed.hint);
     return;
   }
   await guard(async () => {
-    const data = await send(`/api/rooms/${state.code}/rounds`, {
-      method: "POST",
+    const data = await send(`/api/rooms/${state.code}/rounds${roundId ? `/${roundId}` : ""}`, {
+      method: roundId ? "PATCH" : "POST",
       body: JSON.stringify({ kind: "award", deltas: parsed.deltas }),
     }, state.session.players[selfId]);
     state.room = data.room;
     state.dialog = "";
+    state.editingRoundId = "";
     state.scores = {};
     remember(data.room);
     paint();
-    toast("记下了");
+    toast(roundId ? "修改好了" : "记下了");
   });
 }
 
@@ -1060,6 +1082,7 @@ function onClick(event) {
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
       state.dialog = "";
+      state.editingRoundId = "";
       paint();
     }
     return;
@@ -1109,6 +1132,7 @@ function onClick(event) {
     state.pickedAvatar = player.avatar;
     paint();
   } else if (action === "open-record") openRecord();
+  else if (action === "edit-round") openRecord(button.dataset.round || "");
   else if (action === "commit") commitScores();
   else if (action === "confirm-create") createRoom();
   else if (action === "edit-profile") {
@@ -1140,6 +1164,7 @@ function onClick(event) {
     paint();
   } else if (action === "cancel-dialog") {
     state.dialog = "";
+    state.editingRoundId = "";
     paint();
   } else if (action === "confirm-end") confirmEnd();
   else if (action === "confirm-disband") confirmDisband();
@@ -1266,7 +1291,7 @@ function renderAdmin() {
         const open = state.adminOpen === room.code;
         const people = room.players.map((player) => `<li><span>${esc(player.name)}</span><b class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</b></li>`).join("");
         const rounds = open
-          ? room.rounds.map((round) => `<p class="round"><b>第${round.seq}局</b><span>${esc(roundLine(room, round))}</span></p>`).join("")
+          ? room.rounds.map((round) => `<p class="round"><b>第${round.seq}局</b><span>${esc(roundLine(room, round))}</span>${round.editedAt ? `<em class="edited-badge">已修改</em>` : ""}</p>`).join("")
           : "";
         return `<article class="room-card${open ? " open" : ""}">
           <header>
