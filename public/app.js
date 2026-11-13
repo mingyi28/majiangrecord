@@ -400,6 +400,48 @@ function scoreState() {
   return { ok: Boolean(selfId) && !bad && (any || editing) && players.length >= 2, deltas, paid, hint };
 }
 
+function scoreTargetRound() {
+  return (state.room?.rounds || []).find((round) =>
+    round.id === state.editingRoundId || round.id === state.settlingRoundId
+  ) || null;
+}
+
+function roundTransfers(round) {
+  if (Array.isArray(round?.transfers)) return round.transfers;
+  return (round?.entries || []).flatMap((entry) =>
+    Object.entries(entry.deltas || {})
+      .filter(([playerId, delta]) => playerId !== entry.actorId && Number(delta) > 0)
+      .map(([playerId, delta]) => ({
+        fromPlayerId: entry.actorId,
+        toPlayerId: playerId,
+        points: Number(delta),
+      }))
+  );
+}
+
+function scoreTransfers(round) {
+  const selfId = currentPlayerId();
+  const transfers = roundTransfers(round).filter((transfer) => transfer.fromPlayerId !== selfId);
+  const parsed = scoreState();
+  for (const [playerId, points] of Object.entries(parsed.deltas)) {
+    if (playerId !== selfId && points > 0) {
+      transfers.push({ fromPlayerId: selfId, toPlayerId: playerId, points });
+    }
+  }
+  return transfers;
+}
+
+function transferSummary(playerId, round = scoreTargetRound()) {
+  const transfers = scoreTransfers(round);
+  const paid = transfers
+    .filter((transfer) => transfer.fromPlayerId === playerId)
+    .map((transfer) => `付给${playerName(transfer.toPlayerId)} ${transfer.points}分`);
+  const received = transfers
+    .filter((transfer) => transfer.toPlayerId === playerId)
+    .map((transfer) => `收到${playerName(transfer.fromPlayerId)} ${transfer.points}分`);
+  return [...paid, ...received].join(" · ") || "暂无收付记录";
+}
+
 function updateSum() {
   const el = document.querySelector("#sum");
   const paid = document.querySelector("#paid-total");
@@ -411,6 +453,9 @@ function updateSum() {
   }
   if (paid) paid.textContent = formatDelta(-parsed.paid);
   if (button) button.disabled = !parsed.ok;
+  document.querySelectorAll("[data-transfer-player]").forEach((element) => {
+    element.textContent = transferSummary(element.dataset.transferPlayer);
+  });
 }
 
 function leaderId() {
@@ -674,11 +719,9 @@ function renderModal() {
         ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
         <div class="paid-total"><span>本局付出的总分</span><strong id="paid-total">${formatDelta(-parsed.paid)}</strong></div>
         <div class="score-list">${otherPlayers.map((player) => {
-          const displayedScore = targetRound ? Number(targetRound.deltas?.[player.id] || 0) : player.total;
-          const scoreLabel = targetRound ? "本局" : "当前";
           return `<label class="score-row">
             <span class="avatar">${avatarSvg(player.avatar)}</span>
-            <span class="score-person"><b>${esc(player.name)}</b><small>${scoreLabel} ${formatDelta(displayedScore)}</small></span>
+            <span class="score-person"><b>${esc(player.name)}</b><small data-transfer-player="${esc(player.id)}">${esc(transferSummary(player.id, targetRound))}</small></span>
             <span class="score-box"><i>＋</i><input class="score-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" placeholder="0" aria-label="给${esc(player.name)}增加的分数"></span>
           </label>`;
         }).join("")}

@@ -89,6 +89,10 @@ test("two phones share one running score", async () => {
     assert.deepEqual(totals, { 阿明: -4, 小李: 4 });
     assert.equal(second.data.room.rounds.length, 1);
     assert.equal(second.data.room.rounds[0].entries.length, 2);
+    assert.deepEqual(second.data.room.rounds[0].transfers, [
+      { fromPlayerId: ming.data.player.id, toPlayerId: li.data.player.id, points: 10 },
+      { fromPlayerId: li.data.player.id, toPlayerId: ming.data.player.id, points: 6 },
+    ]);
 
     clock += 61_000;
     const nextRound = await send(base, `/api/rooms/${code}/rounds`, {
