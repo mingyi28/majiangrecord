@@ -442,16 +442,28 @@ function transferSummary(playerId, round = scoreTargetRound()) {
   return [...paid, ...received].join(" · ") || "—";
 }
 
+function roundNetScore(playerId, round = scoreTargetRound()) {
+  return scoreTransfers(round).reduce((total, transfer) => {
+    if (transfer.fromPlayerId === playerId) return total - transfer.points;
+    if (transfer.toPlayerId === playerId) return total + transfer.points;
+    return total;
+  }, 0);
+}
+
 function updateSum() {
   const el = document.querySelector("#sum");
-  const paid = document.querySelector("#paid-total");
+  const selfTotal = document.querySelector("#self-round-total");
   const button = document.querySelector("[data-action='commit']");
   const parsed = scoreState();
   if (el) {
     el.textContent = parsed.hint;
     el.className = parsed.ok ? "sum ok" : "sum";
   }
-  if (paid) paid.textContent = formatDelta(-parsed.paid);
+  if (selfTotal) {
+    const total = roundNetScore(currentPlayerId());
+    selfTotal.textContent = formatDelta(total);
+    selfTotal.className = total > 0 ? "up" : total < 0 ? "down" : "flat";
+  }
   if (button) button.disabled = !parsed.ok;
   document.querySelectorAll("[data-transfer-player]").forEach((element) => {
     element.textContent = transferSummary(element.dataset.transferPlayer);
@@ -711,6 +723,7 @@ function renderModal() {
     const editingRound = state.room.rounds.find((round) => round.id === state.editingRoundId);
     const settlingRound = state.room.rounds.find((round) => round.id === state.settlingRoundId);
     const targetRound = editingRound || settlingRound;
+    const selfRoundTotal = roundNetScore(selfId, targetRound);
     return `<div class="modal-root">
       <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
         <div class="modal-heading">
@@ -722,7 +735,7 @@ function renderModal() {
           ${selfPlayer ? `<div class="score-row self-score-row">
             <span class="avatar">${avatarSvg(selfPlayer.avatar)}</span>
             <span class="score-person"><b>${esc(selfPlayer.name)}<em class="self-marker">我</em></b><small data-transfer-player="${esc(selfPlayer.id)}">${esc(transferSummary(selfPlayer.id, targetRound))}</small></span>
-            <span class="self-paid"><small>本局</small><strong id="paid-total">${formatDelta(-parsed.paid)}</strong></span>
+            <span class="self-round-score"><small>本局总得分</small><strong id="self-round-total" class="${selfRoundTotal > 0 ? "up" : selfRoundTotal < 0 ? "down" : "flat"}">${formatDelta(selfRoundTotal)}</strong></span>
           </div>` : ""}
           ${otherPlayers.map((player) => {
           return `<label class="score-row">

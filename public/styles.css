@@ -532,10 +532,13 @@ input:focus { border-color: var(--cyan); }
 .score-person small { margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
 .self-score-row { background: #eaf9f8; }
 .self-marker { margin-left: 5px; color: var(--cyan-deep); font-size: 10px; font-style: normal; }
-.self-paid { justify-self: end; text-align: right; }
-.self-paid small, .self-paid strong { display: block; }
-.self-paid small { color: var(--muted); font-size: 10px; font-weight: 700; }
-.self-paid strong { margin-top: 1px; color: #c85e65; font-size: 18px; }
+.self-round-score { justify-self: end; text-align: right; }
+.self-round-score small, .self-round-score strong { display: block; white-space: nowrap; }
+.self-round-score small { color: var(--muted); font-size: 10px; font-weight: 700; }
+.self-round-score strong { margin-top: 1px; font-size: 18px; }
+.self-round-score strong.up { color: #239b72; }
+.self-round-score strong.down { color: #d45f64; }
+.self-round-score strong.flat { color: var(--muted); }
 .score-box { display: flex; align-items: center; border: 1.5px solid var(--line); border-radius: 14px; background: white; overflow: hidden; }
 .score-box:focus-within { border-color: var(--cyan); }
 .score-box i { padding-left: 9px; color: var(--cyan-deep); font-style: normal; font-size: 18px; }
