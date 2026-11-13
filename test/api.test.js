@@ -419,6 +419,30 @@ test("a full table stops at eight and names are stored as text", async () => {
     assert.equal(overview.data.summary.players, 8);
     assert.equal(overview.data.rooms[0].code, code);
     assert.equal(overview.data.rooms[0].players.length, 8);
+    const hiddenPlayer = await send(base, "/api/admin/visibility", {
+      method: "POST",
+      headers: { cookie: adminCookie.split(";")[0] },
+      body: { kind: "player", hidden: true, name: "玩家1<b>", avatar: "chick" },
+    });
+    assert.equal(hiddenPlayer.status, 200);
+    assert.deepEqual(hiddenPlayer.data.hiddenPlayers, [{ name: "玩家1<b>", avatar: "chick" }]);
+    const hiddenRoom = await send(base, "/api/admin/visibility", {
+      method: "POST",
+      headers: { cookie: adminCookie.split(";")[0] },
+      body: { kind: "room", hidden: true, code },
+    });
+    assert.deepEqual(hiddenRoom.data.hiddenRooms, [code]);
+    const withHiddenItems = await send(base, "/api/admin/overview", {
+      headers: { cookie: adminCookie.split(";")[0] },
+    });
+    assert.equal(withHiddenItems.data.hiddenPlayers[0].name, "玩家1<b>");
+    assert.deepEqual(withHiddenItems.data.hiddenRooms, [code]);
+    const restoredPlayer = await send(base, "/api/admin/visibility", {
+      method: "POST",
+      headers: { cookie: adminCookie.split(";")[0] },
+      body: { kind: "player", hidden: false, name: "玩家1<b>", avatar: "chick" },
+    });
+    assert.deepEqual(restoredPlayer.data.hiddenPlayers, []);
     const wrong = await send(base, "/api/admin/overview", { token: "table-admin" });
     assert.equal(wrong.status, 401);
 

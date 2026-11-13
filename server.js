@@ -268,6 +268,29 @@ function createApp(store) {
       return;
     }
 
+    if (pathname === "/api/admin/visibility" && req.method === "POST") {
+      if (!verifyAdminToken(cookie(req, "admin_token"))) throw new AppError(401, "请重新登录");
+      const body = await readJson(req);
+      if (typeof body.hidden !== "boolean") throw new AppError(400, "隐藏状态不正确");
+      if (body.kind === "player") {
+        send(res, 200, await store.setAdminVisibility({
+          kind: "player",
+          hidden: body.hidden,
+          player: { name: cleanName(body.name), avatar: cleanAvatar(body.avatar) },
+        }));
+        return;
+      }
+      if (body.kind === "room" && /^\d{5}$/.test(String(body.code || ""))) {
+        send(res, 200, await store.setAdminVisibility({
+          kind: "room",
+          hidden: body.hidden,
+          code: String(body.code),
+        }));
+        return;
+      }
+      throw new AppError(400, "隐藏对象不正确");
+    }
+
     if (pathname === "/api/feedback" && req.method === "POST") {
       const body = await readJson(req);
       const name = body.name ? cleanName(body.name) : "";

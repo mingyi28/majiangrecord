@@ -20,6 +20,7 @@ const state = {
   adminOpen: "",
   adminPlayerRank: 0,
   adminHideZeroRooms: false,
+  adminHiddenList: "",
   profileHistory: null,
   profileLoading: false,
   editingProfileId: "",
@@ -1287,9 +1288,10 @@ function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
-      if (state.view === "admin" && (state.adminOpen || state.adminPlayerRank)) {
+      if (state.view === "admin" && (state.adminOpen || state.adminPlayerRank || state.adminHiddenList)) {
         state.adminOpen = "";
         state.adminPlayerRank = 0;
+        state.adminHiddenList = "";
         paint();
         return;
       }
@@ -1392,15 +1394,31 @@ function onClick(event) {
   else if (action === "open-admin-room") {
     state.adminOpen = button.dataset.code || "";
     state.adminPlayerRank = 0;
+    state.adminHiddenList = "";
     paint();
   } else if (action === "open-admin-player") {
     state.adminPlayerRank = Number(button.dataset.rank) || 0;
     state.adminOpen = "";
+    state.adminHiddenList = "";
     paint();
   } else if (action === "close-admin-detail") {
     state.adminOpen = "";
     state.adminPlayerRank = 0;
+    state.adminHiddenList = "";
     paint();
+  } else if (action === "open-hidden-list") {
+    state.adminHiddenList = button.dataset.kind === "rooms" ? "rooms" : "players";
+    state.adminOpen = "";
+    state.adminPlayerRank = 0;
+    paint();
+  } else if (action === "hide-admin-player") {
+    setAdminPlayerVisibility(Number(button.dataset.rank) || 0, true);
+  } else if (action === "unhide-admin-player") {
+    setAdminPlayerVisibility(Number(button.dataset.index), false);
+  } else if (action === "hide-admin-room") {
+    setAdminRoomVisibility(button.dataset.code || "", true);
+  } else if (action === "unhide-admin-room") {
+    setAdminRoomVisibility(button.dataset.code || "", false);
   } else if (action === "toggle-zero-rooms") {
     state.adminHideZeroRooms = !state.adminHideZeroRooms;
     paint();
@@ -1443,9 +1461,10 @@ function onSubmit(event) {
 }
 
 function onKeydown(event) {
-  if (event.key === "Escape" && state.view === "admin" && (state.adminOpen || state.adminPlayerRank)) {
+  if (event.key === "Escape" && state.view === "admin" && (state.adminOpen || state.adminPlayerRank || state.adminHiddenList)) {
     state.adminOpen = "";
     state.adminPlayerRank = 0;
+    state.adminHiddenList = "";
     paint();
     return;
   }
@@ -1524,6 +1543,10 @@ function renderAdminRoomDetail(room) {
       <ul class="admin-detail-players">${people}</ul>
       <h3>对局记录</h3>
       <div class="admin-detail-rounds">${rounds}</div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-action="hide-admin-room" data-code="${esc(room.code)}">隐藏此房间</button>
+        <button type="button" class="btn primary" data-action="close-admin-detail">完成</button>
+      </div>
     </div>
   </div>`;
 }
@@ -1546,7 +1569,7 @@ function renderAdminPlayerDetail(player, rooms) {
       <div class="modal-heading">
         <div class="admin-player-heading">
           <span class="avatar">${avatarSvg(player.avatar)}</span>
-          <div><h2 id="admin-player-title">${esc(player.name)}</h2><p>天梯第 ${player.rank} 名</p></div>
+          <div><h2 id="admin-player-title">${esc(player.name)}</h2><p>天梯第 ${player.displayRank || player.rank} 名</p></div>
         </div>
         <button type="button" class="close-button" data-action="close-admin-detail" aria-label="关闭">×</button>
       </div>
@@ -1558,6 +1581,37 @@ function renderAdminPlayerDetail(player, rooms) {
       </div>
       <h3>历史房间</h3>
       <div class="admin-player-history">${history}</div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-action="hide-admin-player" data-rank="${player.rank}">隐藏此人</button>
+        <button type="button" class="btn primary" data-action="close-admin-detail">完成</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderAdminHiddenList(kind, hiddenPlayers, hiddenRooms, rooms) {
+  const isPlayers = kind === "players";
+  const items = isPlayers
+    ? hiddenPlayers.map((player, index) => `
+        <div class="admin-hidden-item">
+          <span class="avatar">${avatarSvg(player.avatar)}</span>
+          <b>${esc(player.name)}</b>
+          <button type="button" data-action="unhide-admin-player" data-index="${index}">解除隐藏</button>
+        </div>`).join("")
+    : hiddenRooms.map((code) => {
+        const room = rooms.find((item) => item.code === code);
+        return `<div class="admin-hidden-item admin-hidden-room">
+          <div><b>${esc(code)}</b><small>${room ? `${room.players.length} 人 · ${room.roundCount} 局` : "历史房间"}</small></div>
+          <button type="button" data-action="unhide-admin-room" data-code="${esc(code)}">解除隐藏</button>
+        </div>`;
+      }).join("");
+  return `<div class="modal-root">
+    <div class="modal admin-hidden-modal" role="dialog" aria-modal="true" aria-labelledby="admin-hidden-title">
+      <div class="modal-heading">
+        <div><h2 id="admin-hidden-title">${isPlayers ? "隐藏玩家" : "隐藏房间"}</h2><p>解除隐藏后会重新显示在看板中。</p></div>
+        <button type="button" class="close-button" data-action="close-admin-detail" aria-label="关闭">×</button>
+      </div>
+      <div class="admin-hidden-list">${items || `<p class="empty-state">隐藏列表为空。</p>`}</div>
     </div>
   </div>`;
 }
@@ -1565,6 +1619,12 @@ function renderAdminPlayerDetail(player, rooms) {
 function renderAdmin() {
   const summary = state.admin && state.admin.summary;
   const leaderboard = (state.admin && state.admin.leaderboard) || [];
+  const hiddenPlayers = (state.admin && state.admin.hiddenPlayers) || [];
+  const hiddenRooms = (state.admin && state.admin.hiddenRooms) || [];
+  const hiddenPlayerKeys = new Set(hiddenPlayers.map((player) => `${player.name}\u0000${player.avatar}`));
+  const visibleLeaderboard = leaderboard
+    .filter((player) => !hiddenPlayerKeys.has(`${player.name}\u0000${player.avatar}`))
+    .map((player, index) => ({ ...player, displayRank: index + 1 }));
   const cards = summary
     ? `<div class="stats">
         ${[
@@ -1577,10 +1637,10 @@ function renderAdmin() {
         ].map(([label, value]) => `<div class="stat"><b>${esc(value)}</b><span>${label}</span></div>`).join("")}
       </div>`
     : "";
-  const ranking = leaderboard.length
-    ? `<div class="ranking-list">${leaderboard.map((player) => `
+  const ranking = visibleLeaderboard.length
+    ? `<div class="ranking-list">${visibleLeaderboard.map((player) => `
         <button type="button" class="ranking-row" data-action="open-admin-player" data-rank="${player.rank}">
-          <span class="rank rank-${player.rank}">${player.rank}</span>
+          <span class="rank rank-${player.displayRank}">${player.displayRank}</span>
           <span class="avatar">${avatarSvg(player.avatar)}</span>
           <div class="ranking-person">
             <b>${esc(player.name)}</b>
@@ -1589,9 +1649,11 @@ function renderAdmin() {
           <div class="ranking-rate"><b>${esc(`${player.winRate}%`)}</b><small>胜率</small></div>
           <strong class="${player.total > 0 ? "up" : player.total < 0 ? "down" : ""}">${esc(formatDelta(player.total))}</strong>
         </button>`).join("")}</div>`
-    : `<p class="empty-state">完成对局后，这里会出现天梯排名。</p>`;
+    : `<p class="empty-state">${hiddenPlayers.length ? "排行榜中的玩家已隐藏，可在隐藏列表恢复。" : "完成对局后，这里会出现天梯排名。"}</p>`;
   const rooms = (state.admin && state.admin.rooms) || [];
-  const visibleRooms = state.adminHideZeroRooms ? rooms.filter((room) => room.roundCount > 0) : rooms;
+  const hiddenRoomCodes = new Set(hiddenRooms);
+  const unhiddenRooms = rooms.filter((room) => !hiddenRoomCodes.has(room.code));
+  const visibleRooms = state.adminHideZeroRooms ? unhiddenRooms.filter((room) => room.roundCount > 0) : unhiddenRooms;
   const feedback = (state.admin && state.admin.feedback) || [];
   const list = visibleRooms.length
     ? visibleRooms.map((room) => {
@@ -1605,7 +1667,7 @@ function renderAdmin() {
           <button type="button" class="room-detail-button" data-action="open-admin-room" data-code="${esc(room.code)}">${room.players.length} 人 · ${room.roundCount} 局 · 查看详情</button>
         </article>`;
       }).join("")
-    : state.admin ? `<p class="empty-state">${state.adminHideZeroRooms ? "没有包含对局的房间。" : "还没有房间记录。"}</p>` : "";
+    : state.admin ? `<p class="empty-state">${hiddenRooms.length && !unhiddenRooms.length ? "房间已隐藏，可在隐藏列表恢复。" : state.adminHideZeroRooms ? "没有包含对局的房间。" : "还没有房间记录。"}</p>` : "";
   const feedbackList = feedback.length
     ? `${feedback.map((item) => `
         <article class="feedback-card">
@@ -1626,11 +1688,13 @@ function renderAdmin() {
     }
   }
   const selectedRoom = rooms.find((room) => room.code === state.adminOpen);
-  const selectedPlayer = leaderboard.find((player) => player.rank === state.adminPlayerRank);
+  const selectedPlayer = visibleLeaderboard.find((player) => player.rank === state.adminPlayerRank);
   const detailModal = selectedRoom
     ? renderAdminRoomDetail(selectedRoom)
     : selectedPlayer
     ? renderAdminPlayerDetail(selectedPlayer, rooms)
+    : state.adminHiddenList
+    ? renderAdminHiddenList(state.adminHiddenList, hiddenPlayers, hiddenRooms, rooms)
     : "";
   return `<div class="screen admin">
     <header class="admin-header">
@@ -1645,13 +1709,17 @@ function renderAdmin() {
         </section>
         <div class="admin-columns">
           <section class="admin-block ranking-block">
-            <div class="admin-title"><div><h2>天梯排行榜</h2><p>按累计总分排名，同分时胜局更多者优先</p></div></div>
+            <div class="admin-title">
+              <div><h2>天梯排行榜</h2><p>按累计总分排名，同分时胜局更多者优先</p></div>
+              <button type="button" class="admin-hidden-trigger" data-action="open-hidden-list" data-kind="players">隐藏列表${hiddenPlayers.length ? ` ${hiddenPlayers.length}` : ""}</button>
+            </div>
             ${ranking}
           </section>
           <section class="admin-block rooms-block">
             <div class="admin-title">
               <div><h2>对局情况</h2><p>查看每个房间、玩家总分和逐局明细</p></div>
               <div class="admin-title-actions">
+                <button type="button" class="admin-hidden-trigger" data-action="open-hidden-list" data-kind="rooms">隐藏列表${hiddenRooms.length ? ` ${hiddenRooms.length}` : ""}</button>
                 <button type="button" class="admin-filter-button${state.adminHideZeroRooms ? " active" : ""}" data-action="toggle-zero-rooms" aria-pressed="${state.adminHideZeroRooms}">过滤 0 局</button>
                 <small>${visibleRooms.length} / ${rooms.length}</small>
               </div>
@@ -1667,6 +1735,41 @@ function renderAdmin() {
       <p class="error">${esc(state.adminError)}</p>
     </div>
   </div>${detailModal}`;
+}
+
+async function updateAdminVisibility(body) {
+  await guard(async () => {
+    const visibility = await adminRequest("/api/admin/visibility", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    state.admin.hiddenPlayers = visibility.hiddenPlayers || [];
+    state.admin.hiddenRooms = visibility.hiddenRooms || [];
+    state.adminOpen = "";
+    state.adminPlayerRank = 0;
+    state.adminHiddenList = "";
+    paint();
+    toast(body.hidden ? "已隐藏" : "已解除隐藏");
+  });
+}
+
+function setAdminPlayerVisibility(identifier, hidden) {
+  const list = hidden ? state.admin?.leaderboard : state.admin?.hiddenPlayers;
+  const player = hidden
+    ? (list || []).find((item) => item.rank === identifier)
+    : (list || [])[identifier];
+  if (!player) return;
+  updateAdminVisibility({
+    kind: "player",
+    hidden,
+    name: player.name,
+    avatar: player.avatar,
+  });
+}
+
+function setAdminRoomVisibility(code, hidden) {
+  if (!/^\d{5}$/.test(code)) return;
+  updateAdminVisibility({ kind: "room", hidden, code });
 }
 
 async function loadAdmin() {
