@@ -330,10 +330,6 @@ function playerName(id) {
   return state.room?.players.find((player) => player.id === id)?.name || "有人";
 }
 
-function isHost() {
-  return Boolean(state.session.hostToken);
-}
-
 async function send(url, options, token) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["content-type"] = "application/json";
@@ -488,7 +484,6 @@ function renderSeat() {
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="close-panel">返回</button>
-      ${isHost() && state.room.status !== "dissolved" ? `<button type="button" class="home-link" data-action="ask-disband">解散</button>` : ""}
       <span class="meta">${esc(state.code)}</span>
     </header>
     <div class="body">
@@ -543,13 +538,11 @@ function renderDock() {
   const seated = Boolean(selfId);
   const parts = [];
   if (!seated) parts.push(`<button type="button" class="btn mint" data-action="open-sit">坐下</button>`);
-  if (canManage() && state.room.players.length >= 2) {
+  if (canManage()) {
     parts.push(`<button type="button" class="btn ghost" data-action="ask-end">关闭房间</button>`);
   }
-  if (selfId && state.room.players.length >= 2) {
+  if (selfId) {
     parts.push(`<button type="button" class="btn primary" data-action="open-record">记一局</button>`);
-  } else if (seated) {
-    parts.push(`<p class="ended">再等一位坐下就能记分</p>`);
   }
   return parts.join("");
 }
@@ -572,9 +565,6 @@ function renderTable() {
   const count = `${state.room.players.length} 人`;
   const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已关闭" : count;
   const active = state.room.status === "active";
-  const disband = isHost() && active
-    ? `<button type="button" class="room-link danger-link" data-action="ask-disband">解散</button>`
-    : "";
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="home">首页</button>
@@ -590,7 +580,6 @@ function renderTable() {
       </button>
       <div class="room-actions">
         <button type="button" class="room-link primary-link" data-action="share">分享</button>
-        ${disband}
       </div>
     </div>` : renderSettlement()}
     <div class="body">
@@ -729,18 +718,6 @@ function renderModal() {
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">再玩一会儿</button>
           <button type="button" class="btn primary" data-action="confirm-end">确认关闭</button>
-        </div>
-      </div>
-    </div>`;
-  }
-  if (state.dialog === "disband") {
-    return `<div class="modal-root">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="disband-title">
-        <h2 id="disband-title">解散这桌？</h2>
-        <p>开错房间可以用这个。解散后不能再记分，记录会留在管理端。</p>
-        <div class="modal-actions">
-          <button type="button" class="btn ghost" data-action="cancel-dialog">再想想</button>
-          <button type="button" class="btn primary" data-action="confirm-disband">解散</button>
         </div>
       </div>
     </div>`;
@@ -1101,19 +1078,6 @@ async function confirmEnd() {
   });
 }
 
-async function confirmDisband() {
-  await guard(async () => {
-    const data = await request(`/api/rooms/${state.code}`, { method: "DELETE" });
-    state.room = data.room;
-    clearActiveRoom(state.code);
-    remember(data.room);
-    state.dialog = "";
-    state.panel = null;
-    paint();
-    toast("这桌已解散");
-  });
-}
-
 async function copyCode() {
   try {
     await navigator.clipboard.writeText(state.code);
@@ -1359,11 +1323,7 @@ function onClick(event) {
   } else if (action === "cancel-profile-edit") {
     closeProfileEditor();
   } else if (action === "confirm-end") confirmEnd();
-  else if (action === "confirm-disband") confirmDisband();
-  else if (action === "ask-disband") {
-    state.dialog = "disband";
-    paint();
-  } else if (action === "toggle-room") {
+  else if (action === "toggle-room") {
     state.adminOpen = state.adminOpen === button.dataset.code ? "" : button.dataset.code || "";
     paint();
   } else if (action === "admin-out") {
