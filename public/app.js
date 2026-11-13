@@ -422,7 +422,6 @@ function scoreState() {
   const players = state.room?.players || [];
   const selfId = currentPlayerId();
   const editing = Boolean(state.editingRoundId || state.settlingRoundId);
-  let sum = 0;
   let any = false;
   let bad = false;
   const deltas = {};
@@ -434,13 +433,10 @@ function scoreState() {
     const parsed = parseScore(state.scores[player.id] ?? "");
     if (!parsed.ok) bad = true;
     deltas[player.id] = parsed.value;
-    sum += parsed.value;
     if (!parsed.empty && parsed.value !== 0) any = true;
   }
-  let hint = "给至少一人增加分数";
+  let hint = "请填写分数";
   if (bad) hint = "只能输入 0 或正整数";
-  else if (any) hint = `本局共加 ${sum} 分`;
-  else if (editing) hint = "保存后会清空你在本局的记录";
   return { ok: Boolean(selfId) && !bad && (any || editing) && players.length >= 2, deltas, hint };
 }
 
@@ -569,7 +565,7 @@ function renderHistory() {
       .filter(([, delta]) => delta)
       .map(([id, delta]) => `${playerName(id)} ${formatDelta(delta)}`);
     const edited = round.editedAt ? `<em class="edited-badge">已修改</em>` : "";
-    const settlement = state.room.status === "active" ? countdownMarkup(round) : `<em class="settled-badge">已结算</em>`;
+    const settlement = edited ? "" : state.room.status === "active" ? countdownMarkup(round) : `<em class="settled-badge">已结算</em>`;
     const content = `<b>第${round.seq}局</b><span>${esc(parts.join(" · ") || "分数没有变化")}</span>${settlement}${edited}`;
     return state.room.status === "active" && currentPlayerId()
       ? `<button type="button" class="round round-button" data-action="edit-round" data-round="${esc(round.id)}">${content}</button>`
@@ -714,7 +710,7 @@ function renderModal() {
     return `<div class="modal-root">
       <div class="modal score-modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
         <div class="modal-heading">
-          <div><h2 id="score-title">${editingRound ? `修改第${editingRound.seq}局` : settlingRound ? `第${settlingRound.seq}局结算` : "记一局"}</h2><p>给其他人增加分数，不能给自己加分。</p></div>
+          <div><h2 id="score-title">${editingRound ? `修改第${editingRound.seq}局` : settlingRound ? `第${settlingRound.seq}局结算` : "记一局"}</h2></div>
           <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
         </div>
         ${settlingRound ? countdownMarkup(settlingRound, true) : ""}
@@ -725,7 +721,6 @@ function renderModal() {
             <span class="score-box"><i>＋</i><input class="score-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" data-player="${esc(player.id)}" value="${esc(state.scores[player.id] || "")}" placeholder="0" aria-label="给${esc(player.name)}增加的分数"></span>
           </label>`).join("")}
         </div>
-        <p id="sum" class="${parsed.ok ? "sum ok" : "sum"}">${esc(parsed.hint)}</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
           <button type="button" class="btn primary" data-action="commit" ${parsed.ok ? "" : "disabled"}>${editingRound ? "保存修改" : targetRound ? "更新本局" : "记下这局"}</button>
