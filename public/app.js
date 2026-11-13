@@ -1,5 +1,7 @@
 const WINDS = ["东", "南", "西", "北"];
 const ROUND_WINDOW_MS = 60 * 1000;
+const ADMIN_LOGIN_MS = 30 * 24 * 60 * 60 * 1000;
+let volatileAdminToken = "";
 
 const state = {
   avatars: [],
@@ -331,18 +333,38 @@ function playerName(id) {
 
 function adminToken() {
   try {
-    return sessionStorage.getItem("mj.admin") || "";
+    const saved = JSON.parse(localStorage.getItem("mj.admin") || "null");
+    if (saved && typeof saved.token === "string" && Number(saved.expiresAt) > Date.now()) {
+      volatileAdminToken = saved.token;
+      return saved.token;
+    }
+    localStorage.removeItem("mj.admin");
+    const legacy = sessionStorage.getItem("mj.admin") || "";
+    if (legacy) {
+      saveAdminToken(legacy);
+      sessionStorage.removeItem("mj.admin");
+      return legacy;
+    }
   } catch {
-    return "";
+    // Fall back to this page's in-memory login when storage is unavailable.
   }
+  return volatileAdminToken;
 }
 
 function saveAdminToken(value) {
+  volatileAdminToken = value || "";
   try {
-    if (value) sessionStorage.setItem("mj.admin", value);
-    else sessionStorage.removeItem("mj.admin");
+    if (value) {
+      localStorage.setItem("mj.admin", JSON.stringify({
+        token: value,
+        expiresAt: Date.now() + ADMIN_LOGIN_MS,
+      }));
+    } else {
+      localStorage.removeItem("mj.admin");
+    }
+    sessionStorage.removeItem("mj.admin");
   } catch {
-    // The password still works for this attempt.
+    // The password still works for this page through memory.
   }
 }
 
@@ -857,17 +879,34 @@ async function loadRoom(code) {
     state.room = data.room;
     const profile = activeProfile();
     const rememberedId = profile?.seats?.[code];
-    if (
-      data.room.status === "active"
-      && rememberedId
+    const alreadySeated = Boolean(
+      rememberedId
       && state.session.players?.[rememberedId]
-      && data.room.players.some((player) => player.id === rememberedId)
-    ) {
+      && state.room.players.some((player) => player.id === rememberedId)
+    );
+    if (state.room.status === "active" && profile && !alreadySeated) {
+      if (profile.activeRoom && profile.activeRoom !== code) {
+        throw new Error(`你还在房间 ${profile.activeRoom}，请先关闭后再加入`);
+      }
+      const seated = await request(`/api/rooms/${code}/players`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: profile.name,
+          avatar: profile.avatar,
+          profileId: profile.id,
+        }),
+      });
+      state.session.players[seated.player.id] = seated.token;
+      rememberSeat(profile.id, code, seated.player.id);
       setActiveRoom(profile.id, code);
-    } else if (data.room.status !== "active") {
+      saveSession();
+      state.room = seated.room;
+    } else if (state.room.status === "active" && profile && alreadySeated) {
+      setActiveRoom(profile.id, code);
+    } else if (state.room.status !== "active") {
       clearActiveRoom(code);
     }
-    remember(data.room);
+    remember(state.room);
     paint();
     startPoll();
   } catch (error) {
