@@ -585,6 +585,9 @@ function renderTable() {
         <small>房间号 · 点击复制</small>
         <strong>${esc(state.code)}</strong>
       </button>
+      <div class="room-actions">
+        <button type="button" class="room-link primary-link" data-action="share">分享</button>
+      </div>
     </div>` : active ? "" : renderSettlement()}
     <div class="body">
       ${active ? `<ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>` : ""}
@@ -1096,6 +1099,24 @@ async function copyCode() {
   }
 }
 
+async function shareRoom() {
+  const url = `${location.origin}/r/${state.code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ url });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("链接已复制");
+  } catch {
+    toast(url);
+  }
+}
+
 function prepareIdentity(profile = activeProfile()) {
   state.draftName = profile ? profile.name : "";
   state.pickedAvatar = profile ? profile.avatar : (state.avatars[0]?.id || "");
@@ -1264,6 +1285,7 @@ function onClick(event) {
     history.pushState(null, "", "/");
     route();
   } else if (action === "copy") copyCode();
+  else if (action === "share") shareRoom();
   else if (action === "role") openRole();
   else if (action === "open-sit") {
     state.panel = "sit";

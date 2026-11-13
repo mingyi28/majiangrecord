@@ -341,6 +341,27 @@ input:focus { border-color: var(--cyan); }
   letter-spacing: 0.2em;
 }
 
+.room-actions {
+  width: 76px;
+  display: grid;
+}
+
+.room-link {
+  border: 0;
+  border-radius: 14px;
+  background: white;
+  min-height: 34px;
+  padding: 0 7px;
+  color: var(--cyan-deep);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.room-link.primary-link {
+  background: var(--cyan-deep);
+  color: white;
+}
+
 .settlement-card {
   flex: none;
   margin-top: 10px;
