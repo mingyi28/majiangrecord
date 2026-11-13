@@ -687,6 +687,21 @@ function renderModal() {
       </div>
     </div>`;
   }
+  if (state.dialog === "share") {
+    return `<div class="modal-root">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <div class="modal-heading">
+          <h2 id="share-title">分享房间</h2>
+          <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
+        </div>
+        <p>微信转发建议先复制链接，再到微信粘贴发送。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="system-share">更多方式</button>
+          <button type="button" class="btn primary" data-action="copy-room-link">复制链接</button>
+        </div>
+      </div>
+    </div>`;
+  }
   if (state.dialog === "create") {
     return renderIdentityEditor({
       title: "开房间",
@@ -1099,8 +1114,34 @@ async function copyCode() {
   }
 }
 
-async function shareRoom() {
-  const url = `${location.origin}/r/${state.code}`;
+function roomShareUrl() {
+  return `${location.origin}/r/${state.code}`;
+}
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+async function copyRoomLink() {
+  const url = roomShareUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    state.dialog = "";
+    paint();
+    toast("链接已复制，请到微信粘贴发送");
+  } catch {
+    toast(url);
+  }
+}
+
+async function shareRoom(forceSystem = false) {
+  if (isIOSDevice() && !forceSystem) {
+    state.dialog = "share";
+    paint();
+    return;
+  }
+  const url = roomShareUrl();
   if (navigator.share) {
     try {
       await navigator.share({ url });
@@ -1286,6 +1327,8 @@ function onClick(event) {
     route();
   } else if (action === "copy") copyCode();
   else if (action === "share") shareRoom();
+  else if (action === "system-share") shareRoom(true);
+  else if (action === "copy-room-link") copyRoomLink();
   else if (action === "role") openRole();
   else if (action === "open-sit") {
     state.panel = "sit";
