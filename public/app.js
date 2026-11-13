@@ -522,7 +522,7 @@ function renderHome() {
       ${activeCode ? "" : `<section class="launch-card">
         <div class="launch-profile">
           ${profile ? `<span class="avatar">${avatarSvg(profile.avatar)}</span><div><small>以这个角色进入</small><b>${esc(profile.name)}</b></div>` : `<div><small>第一次使用</small><b>先选一个喜欢的角色</b></div>`}
-          <button type="button" class="link" data-action="role">${profile ? "切换" : "设置"}</button>
+          ${profile ? "" : `<button type="button" class="link" data-action="role">设置</button>`}
         </div>
         <button type="button" class="btn primary create-button" data-action="create"><span>开房间</span><small>创建房间并邀请朋友</small></button>
       </section>
