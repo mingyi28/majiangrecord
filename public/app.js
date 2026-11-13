@@ -618,7 +618,7 @@ function renderTable() {
   return `<div class="screen">
     <header class="top${compactRoomCode ? " room-code-in-header" : ""}">
       <button type="button" class="home-link" data-action="home">首页</button>
-      ${compactRoomCode ? `<button type="button" class="top-room-number" data-action="copy" aria-label="复制房间号 ${esc(state.code)}">
+      ${compactRoomCode ? `<button type="button" class="top-room-number" data-action="copy-room-link" aria-label="复制房间链接">
         <small>房间号</small>
         <strong>${esc(state.code)}</strong>
       </button>` : ""}
@@ -1214,7 +1214,7 @@ async function copyRoomLink() {
     await navigator.clipboard.writeText(url);
     state.dialog = "";
     paint();
-    toast("链接已复制，请到微信粘贴发送");
+    toast("房间链接已复制");
   } catch {
     toast(url);
   }
