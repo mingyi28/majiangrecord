@@ -194,6 +194,26 @@ function rememberSeat(profileId, code, playerId) {
   writeJsonStorage("mj.profiles", profiles);
 }
 
+function setActiveRoom(profileId, code) {
+  const profiles = loadProfiles();
+  const profile = profiles.find((item) => item.id === profileId);
+  if (!profile) return;
+  profile.activeRoom = code || "";
+  writeJsonStorage("mj.profiles", profiles);
+}
+
+function clearActiveRoom(code) {
+  const profiles = loadProfiles();
+  let changed = false;
+  for (const profile of profiles) {
+    if (profile.activeRoom === code) {
+      profile.activeRoom = "";
+      changed = true;
+    }
+  }
+  if (changed) writeJsonStorage("mj.profiles", profiles);
+}
+
 function loadSession(code) {
   const all = readJsonStorage("mj.sessions", {});
   const saved = all[code] || {};
@@ -219,9 +239,23 @@ function remember(room) {
   recents.unshift({
     code: room.code,
     names: room.players.map((player) => player.name).slice(0, 4),
+    count: room.players.length,
+    status: room.status || "active",
     at: Date.now(),
   });
   writeJsonStorage("mj.recents", recents.slice(0, 8));
+}
+
+function recentTime(value) {
+  const date = new Date(Number(value) || 0);
+  if (!Number.isFinite(date.getTime())) return "";
+  const now = new Date();
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+  const time = date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (sameDay) return `今天 ${time}`;
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${time}`;
 }
 
 function authToken() {
@@ -372,12 +406,28 @@ function played(id) {
 
 function renderHome() {
   const profile = activeProfile();
-  const recents = loadRecents().slice(0, 2);
+  const allRecents = loadRecents();
+  const activeCode = /^\d{5}$/.test(profile?.activeRoom || "") ? profile.activeRoom : "";
+  const liveRoom = activeCode && state.code === activeCode && state.room?.status === "active" ? state.room : null;
+  const cachedCurrent = allRecents.find((item) => item.code === activeCode);
+  const currentNames = liveRoom ? liveRoom.players.map((player) => player.name) : (cachedCurrent?.names || []);
+  const currentCount = liveRoom ? liveRoom.players.length : (cachedCurrent?.count || currentNames.length);
+  const recents = allRecents.filter((item) => item.code !== activeCode).slice(0, activeCode ? 3 : 2);
   const recentHtml = recents.map((item) => `
     <button type="button" class="recent" data-action="open" data-code="${esc(item.code)}">
-      <span><b>${esc(item.code)}</b><small>${esc(item.names.join("、") || "还没有人")}</small></span>
+      <span class="recent-main"><b>${esc(item.code)}</b><small>${esc(item.names.join("、") || "还没有人")}</small></span>
+      <time>${esc(recentTime(item.at))}</time>
       <i>›</i>
     </button>`).join("");
+  const currentHtml = activeCode ? `
+    <section class="current-room-card">
+      <div>
+        <small>当前房间 · 进行中</small>
+        <strong>${esc(activeCode)}</strong>
+        <span>${currentCount ? `${currentCount} 人 · ` : ""}${esc(currentNames.join("、") || "点击回到房间")}</span>
+      </div>
+      <button type="button" class="btn primary" data-action="open" data-code="${esc(activeCode)}">进入房间</button>
+    </section>` : "";
   return `<div class="screen home">
     <header class="hero">
       <button type="button" class="role-button" data-action="role">
@@ -388,7 +438,8 @@ function renderHome() {
       <p class="lede">五位数字进同一间，给每人直接填分数。</p>
     </header>
     <div class="body">
-      <section class="launch-card">
+      ${currentHtml}
+      ${activeCode ? "" : `<section class="launch-card">
         <div class="launch-profile">
           ${profile ? `<span class="avatar">${avatarSvg(profile.avatar)}</span><div><small>以这个角色进入</small><b>${esc(profile.name)}</b></div>` : `<div><small>第一次使用</small><b>先选一个喜欢的角色</b></div>`}
           <button type="button" class="link" data-action="role">${profile ? "切换" : "设置"}</button>
@@ -401,7 +452,7 @@ function renderHome() {
           <input id="join-code" class="code-input" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="one-time-code" placeholder="00000" aria-label="五位数字房间号" required>
           <button class="btn mint" type="submit">进入</button>
         </form>
-      </section>
+      </section>`}
       ${recentHtml ? `<section class="recent-section"><div class="section-title"><b>最近房间</b></div><div class="recents">${recentHtml}</div></section>` : ""}
       <p class="error">${esc(state.homeError)}</p>
     </div>
@@ -519,7 +570,7 @@ function renderTable() {
   </div>`;
 }
 
-function renderIdentityEditor({ title, copy, action, buttonText }) {
+function renderIdentityEditor({ title, copy, action, buttonText, cancelAction = "cancel-dialog" }) {
   return `<div class="modal-root">
     <div class="modal identity-modal" role="dialog" aria-modal="true">
       <h2>${title}</h2>
@@ -527,7 +578,7 @@ function renderIdentityEditor({ title, copy, action, buttonText }) {
       <input id="identity-name" class="name-input" maxlength="12" autocomplete="nickname" placeholder="你的称呼" value="${esc(state.draftName)}" aria-label="称呼">
       <div class="picks roomy">${state.avatars.map((avatar) => avatarButton(avatar.id)).join("")}</div>
       <div class="modal-actions">
-        <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
+        <button type="button" class="btn ghost" data-action="${cancelAction}">取消</button>
         <button type="button" class="btn primary" data-action="${action}">${buttonText}</button>
       </div>
     </div>
@@ -539,18 +590,25 @@ function renderRoleModal() {
   const profiles = loadProfiles();
   const history = state.profileHistory;
   const choices = profiles.map((item) => `
-    <button type="button" class="profile-choice${profile && item.id === profile.id ? " active" : ""}" data-action="switch-profile" data-profile="${esc(item.id)}">
-      <span class="avatar">${avatarSvg(item.avatar)}</span>
-      <span>${esc(item.name)}</span>
-    </button>`).join("");
-  const stats = history
+    <div class="profile-choice${profile && item.id === profile.id ? " active" : ""}">
+      <button type="button" class="profile-select" data-action="switch-profile" data-profile="${esc(item.id)}">
+        <span class="avatar">${avatarSvg(item.avatar)}</span>
+        <span>${esc(item.name)}</span>
+      </button>
+      <button type="button" class="profile-edit-button" data-action="edit-profile" data-profile="${esc(item.id)}">修改</button>
+    </div>`).join("");
+  const stats = state.profileLoading
+    ? `<div class="profile-stats skeleton-stats">${[1, 2, 3].map(() => `<div><i></i><span></span></div>`).join("")}</div>`
+    : history
     ? `<div class="profile-stats">
         <div><b>${history.rooms}</b><span>房间</span></div>
         <div><b>${history.rounds}</b><span>对局</span></div>
         <div><b>${formatDelta(history.total)}</b><span>总分</span></div>
       </div>`
-    : `<p class="hint">${state.profileLoading ? "正在整理战绩…" : "还没有历史战绩"}</p>`;
-  const records = history && history.records.length
+    : `<p class="hint">还没有历史战绩</p>`;
+  const records = state.profileLoading
+    ? `<div class="profile-records skeleton-records">${[1, 2].map(() => `<div><i></i><span></span><i></i></div>`).join("")}</div>`
+    : history && history.records.length
     ? `<div class="profile-records">${history.records.map((item) => `
         <div><b>${esc(item.code)}</b><span>${item.rounds} 局</span><strong class="${item.total > 0 ? "up" : item.total < 0 ? "down" : ""}">${esc(formatDelta(item.total))}</strong></div>
       `).join("")}</div>`
@@ -561,7 +619,7 @@ function renderRoleModal() {
         <h2 id="role-title">我的角色</h2>
         <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
       </div>
-      ${profile ? `<div class="profile-main"><span class="avatar">${avatarSvg(profile.avatar)}</span><div><b>${esc(profile.name)}</b><small>本机角色</small></div><button type="button" class="link" data-action="edit-profile">修改</button></div>` : `<p class="hint">还没有角色，先新建一个吧。</p>`}
+      ${profile ? "" : `<p class="hint">还没有角色，先新建一个吧。</p>`}
       ${choices ? `<div class="profile-choices">${choices}</div>` : ""}
       <button type="button" class="link add-profile" data-action="new-profile">＋ 新角色</button>
       <h3>历史战绩</h3>
@@ -614,6 +672,7 @@ function renderModal() {
       copy: "",
       action: "save-profile",
       buttonText: "保存",
+      cancelAction: "cancel-profile-edit",
     });
   }
   if (state.dialog === "feedback") {
@@ -701,6 +760,12 @@ async function createRoom() {
   }
   await guard(async () => {
     const profile = saveProfile(name, state.pickedAvatar, state.editingProfileId || activeProfile()?.id || "");
+    if (profile.activeRoom) {
+      state.dialog = "";
+      toast(`你还在房间 ${profile.activeRoom}`);
+      openRoom(profile.activeRoom);
+      return;
+    }
     const data = await request("/api/rooms", { method: "POST", body: "{}" });
     state.code = data.code;
     state.session = { hostToken: data.hostToken, players: {} };
@@ -708,10 +773,11 @@ async function createRoom() {
     state.room = data.room;
     const seated = await request(`/api/rooms/${data.code}/players`, {
       method: "POST",
-      body: JSON.stringify({ name, avatar: state.pickedAvatar }),
+      body: JSON.stringify({ name, avatar: state.pickedAvatar, profileId: profile.id }),
     });
     state.session.players[seated.player.id] = seated.token;
     rememberSeat(profile.id, data.code, seated.player.id);
+    setActiveRoom(profile.id, data.code);
     saveSession();
     state.room = seated.room;
     state.view = "table";
@@ -734,6 +800,18 @@ async function loadRoom(code) {
   try {
     const data = await request(`/api/rooms/${code}`);
     state.room = data.room;
+    const profile = activeProfile();
+    const rememberedId = profile?.seats?.[code];
+    if (
+      data.room.status === "active"
+      && rememberedId
+      && state.session.players?.[rememberedId]
+      && data.room.players.some((player) => player.id === rememberedId)
+    ) {
+      setActiveRoom(profile.id, code);
+    } else if (data.room.status !== "active") {
+      clearActiveRoom(code);
+    }
     remember(data.room);
     paint();
     startPoll();
@@ -743,6 +821,46 @@ async function loadRoom(code) {
     state.homeError = error.message;
     history.replaceState(null, "", "#/");
     paint();
+  }
+}
+
+async function refreshActiveRoomOnHome() {
+  const profile = activeProfile();
+  if (!profile) return;
+  let code = profile.activeRoom || "";
+  if (!/^\d{5}$/.test(code)) {
+    const sessions = readJsonStorage("mj.sessions", {});
+    const candidates = loadRecents().filter((recent) => {
+      const playerId = profile.seats?.[recent.code];
+      return playerId && sessions[recent.code]?.players?.[playerId];
+    });
+    for (const recent of candidates) {
+      try {
+        const data = await send(`/api/rooms/${recent.code}`, {}, "");
+        const playerId = profile.seats?.[recent.code];
+        if (data.room.status === "active" && data.room.players.some((player) => player.id === playerId)) {
+          code = recent.code;
+          setActiveRoom(profile.id, code);
+          remember(data.room);
+          if (state.view === "home" && activeProfile()?.id === profile.id) paint();
+          return;
+        }
+      } catch {
+        // Keep checking older rooms saved on this device.
+      }
+    }
+    return;
+  }
+  try {
+    const data = await send(`/api/rooms/${code}`, {}, "");
+    remember(data.room);
+    if (data.room.status !== "active") clearActiveRoom(code);
+    if (state.view === "home" && activeProfile()?.id === profile.id) paint();
+  } catch (error) {
+    if (/找不到/.test(error.message)) {
+      clearActiveRoom(code);
+      if (state.view === "home") paint();
+    }
   }
 }
 
@@ -758,6 +876,10 @@ async function refreshRoom() {
     const nextIds = data.room.players.map((player) => player.id).join();
     const nextRound = data.room.rounds[0];
     const nextRoundKey = nextRound ? `${nextRound.id}:${nextRound.updatedAt || nextRound.createdAt}` : "";
+    if (data.room.status !== "active") clearActiveRoom(state.code);
+    if (previousIds !== nextIds || previousRoundKey !== nextRoundKey || previousStatus !== data.room.status) {
+      remember(data.room);
+    }
     if ((data.room.status === "ended" || data.room.status === "dissolved") && state.dialog === "record") {
       state.dialog = "";
       state.editingRoundId = "";
@@ -807,12 +929,17 @@ async function saveSit() {
   }
   await guard(async () => {
     const profile = saveProfile(name, state.pickedAvatar, activeProfile()?.id || "");
+    if (profile.activeRoom && profile.activeRoom !== state.code) {
+      toast(`你还在房间 ${profile.activeRoom}，请先结束后再加入`);
+      return;
+    }
     const data = await request(`/api/rooms/${state.code}/players`, {
       method: "POST",
-      body: JSON.stringify({ name, avatar: state.pickedAvatar }),
+      body: JSON.stringify({ name, avatar: state.pickedAvatar, profileId: profile.id }),
     });
     state.session.players[data.player.id] = data.token;
     rememberSeat(profile.id, state.code, data.player.id);
+    setActiveRoom(profile.id, state.code);
     saveSession();
     state.room = data.room;
     state.panel = null;
@@ -905,6 +1032,8 @@ async function confirmEnd() {
   await guard(async () => {
     const data = await request(`/api/rooms/${state.code}/end`, { method: "POST", body: "{}" });
     state.room = data.room;
+    clearActiveRoom(state.code);
+    remember(data.room);
     state.dialog = "";
     state.panel = null;
     paint();
@@ -916,6 +1045,8 @@ async function confirmDisband() {
   await guard(async () => {
     const data = await request(`/api/rooms/${state.code}`, { method: "DELETE" });
     state.room = data.room;
+    clearActiveRoom(state.code);
+    remember(data.room);
     state.dialog = "";
     state.panel = null;
     paint();
@@ -1033,6 +1164,7 @@ async function loadProfileHistory() {
 function openRole() {
   state.dialog = "profile";
   state.profileHistory = null;
+  state.profileLoading = Boolean(activeProfile());
   paint();
   loadProfileHistory();
 }
@@ -1081,7 +1213,8 @@ function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
     if (event.target.classList && event.target.classList.contains("modal-root")) {
-      state.dialog = "";
+      state.dialog = state.dialog === "profile-edit" ? "profile" : "";
+      state.editingProfileId = "";
       state.editingRoundId = "";
       paint();
     }
@@ -1136,7 +1269,8 @@ function onClick(event) {
   else if (action === "commit") commitScores();
   else if (action === "confirm-create") createRoom();
   else if (action === "edit-profile") {
-    prepareIdentity();
+    const profile = loadProfiles().find((item) => item.id === button.dataset.profile) || activeProfile();
+    prepareIdentity(profile);
     state.dialog = "profile-edit";
     paint();
     focusSoon("#identity-name");
@@ -1149,6 +1283,7 @@ function onClick(event) {
   else if (action === "switch-profile") {
     setActiveProfile(button.dataset.profile || "");
     state.profileHistory = null;
+    state.profileLoading = true;
     paint();
     loadProfileHistory();
   } else if (action === "open-feedback") {
@@ -1165,6 +1300,10 @@ function onClick(event) {
   } else if (action === "cancel-dialog") {
     state.dialog = "";
     state.editingRoundId = "";
+    paint();
+  } else if (action === "cancel-profile-edit") {
+    state.dialog = "profile";
+    state.editingProfileId = "";
     paint();
   } else if (action === "confirm-end") confirmEnd();
   else if (action === "confirm-disband") confirmDisband();
@@ -1217,7 +1356,8 @@ function onSubmit(event) {
 
 function onKeydown(event) {
   if (event.key === "Escape" && state.dialog) {
-    state.dialog = "";
+    state.dialog = state.dialog === "profile-edit" ? "profile" : "";
+    state.editingProfileId = "";
     paint();
     return;
   }
@@ -1408,6 +1548,7 @@ function route() {
     state.panel = null;
     state.dialog = "";
     paint();
+    refreshActiveRoomOnHome();
     return;
   }
   if (state.view === "table" && state.code === match[1] && state.room) return;

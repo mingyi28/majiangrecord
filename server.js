@@ -100,6 +100,15 @@ function cleanName(value) {
   return name;
 }
 
+function cleanProfileId(value) {
+  if (value == null || value === "") throw new AppError(400, "缺少角色信息");
+  const profileId = String(value);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(profileId)) {
+    throw new AppError(400, "角色信息不正确");
+  }
+  return profileId;
+}
+
 function cleanNote(value) {
   const note = String(value ?? "").replace(/\s+/g, " ").trim();
   if ([...note].length > 30) throw new AppError(400, "备注最多 30 个字");
@@ -243,6 +252,7 @@ function createApp(store) {
         const created = await store.addPlayer(code, {
           name: cleanName(body.name),
           avatar: cleanAvatar(body.avatar),
+          profileId: cleanProfileId(body.profileId),
         });
         send(res, 201, created);
         return;

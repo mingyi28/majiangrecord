@@ -41,11 +41,11 @@ test("two phones share one running score", async () => {
     const host = created.data.hostToken;
     const ming = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "阿明", avatar: "bunny" },
+      body: { name: "阿明", avatar: "bunny", profileId: "ming-main" },
     });
     const li = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "小李", avatar: "cat" },
+      body: { name: "小李", avatar: "cat", profileId: "li-main" },
     });
     assert.equal(ming.status, 201);
     assert.equal(li.status, 201);
@@ -211,15 +211,15 @@ test("scoring requires a seat token from this room", async () => {
     const code = first.data.code;
     const ming = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "阿明", avatar: "fox" },
+      body: { name: "阿明", avatar: "fox", profileId: "ming-auth" },
     });
     await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "小李", avatar: "panda" },
+      body: { name: "小李", avatar: "panda", profileId: "li-auth" },
     });
     const outsider = await send(base, `/api/rooms/${second.data.code}/players`, {
       method: "POST",
-      body: { name: "外人", avatar: "chick" },
+      body: { name: "外人", avatar: "chick", profileId: "outsider-auth" },
     });
 
     const missing = await send(base, `/api/rooms/${code}/rounds`, {
@@ -244,17 +244,56 @@ test("scoring requires a seat token from this room", async () => {
     const endMissing = await send(base, `/api/rooms/${code}/end`, { method: "POST", body: {} });
     assert.equal(endMissing.status, 401);
 
+    const missingProfile = await send(base, `/api/rooms/${code}/players`, {
+      method: "POST",
+      body: { name: "小王", avatar: "bunny" },
+    });
+    assert.equal(missingProfile.status, 400);
+    assert.match(missingProfile.data.error, /角色/);
+
     const badName = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "   ", avatar: "bunny" },
+      body: { name: "   ", avatar: "bunny", profileId: "bad-name" },
     });
     assert.equal(badName.status, 400);
 
     const badAvatar = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "小王", avatar: "<script>" },
+      body: { name: "小王", avatar: "<script>", profileId: "bad-avatar" },
     });
     assert.equal(badAvatar.status, 400);
+  });
+});
+
+test("one profile can only sit in one active room", async () => {
+  await withServer(async (base) => {
+    const first = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const second = await send(base, "/api/rooms", { method: "POST", body: {} });
+    const profileId = "profile-one-room";
+    const seated = await send(base, `/api/rooms/${first.data.code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "bunny", profileId },
+    });
+    assert.equal(seated.status, 201);
+
+    const blocked = await send(base, `/api/rooms/${second.data.code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "bunny", profileId },
+    });
+    assert.equal(blocked.status, 409);
+    assert.match(blocked.data.error, new RegExp(first.data.code));
+
+    const ended = await send(base, `/api/rooms/${first.data.code}/end`, {
+      method: "POST",
+      token: first.data.hostToken,
+      body: {},
+    });
+    assert.equal(ended.status, 200);
+    const moved = await send(base, `/api/rooms/${second.data.code}/players`, {
+      method: "POST",
+      body: { name: "阿明", avatar: "bunny", profileId },
+    });
+    assert.equal(moved.status, 201);
   });
 });
 
@@ -265,14 +304,14 @@ test("a full table stops at eight and names are stored as text", async () => {
     for (let i = 0; i < 8; i += 1) {
       const joined = await send(base, `/api/rooms/${code}/players`, {
         method: "POST",
-        body: { name: `玩家${i}<b>`, avatar: "chick" },
+        body: { name: `玩家${i}<b>`, avatar: "chick", profileId: `full-player-${i}` },
       });
       assert.equal(joined.status, 201);
       assert.equal(joined.data.player.name, `玩家${i}<b>`);
     }
     const overflow = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "第九人", avatar: "sprout" },
+      body: { name: "第九人", avatar: "sprout", profileId: "full-player-nine" },
     });
     assert.equal(overflow.status, 409);
 
@@ -295,7 +334,7 @@ test("a full table stops at eight and names are stored as text", async () => {
     assert.equal(dissolved.data.room.status, "dissolved");
     const again = await send(base, `/api/rooms/${code}/players`, {
       method: "POST",
-      body: { name: "后来的", avatar: "bunny" },
+      body: { name: "后来的", avatar: "bunny", profileId: "late-player" },
     });
     assert.equal(again.status, 409);
 
