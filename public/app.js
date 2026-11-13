@@ -472,7 +472,7 @@ function renderHome() {
           <button class="btn mint" type="submit">进入</button>
         </form>
       </section>`}
-      ${recentHtml ? `<section class="recent-section"><div class="section-title"><b>最近房间</b></div><div class="recents">${recentHtml}</div></section>` : ""}
+      ${recentHtml ? `<section class="recent-section"><div class="section-title"><b>历史房间</b></div><div class="recents">${recentHtml}</div></section>` : ""}
       <p class="error">${esc(state.homeError)}</p>
     </div>
   </div>`;
