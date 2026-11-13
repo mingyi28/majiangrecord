@@ -22,6 +22,7 @@ const state = {
   profileLoading: false,
   editingProfileId: "",
   onboardingProfile: false,
+  pendingRoomCode: "",
   homeError: "",
   busy: false,
   toastTimer: 0,
@@ -754,8 +755,12 @@ function openRoom(code) {
     return;
   }
   state.homeError = "";
-  if (location.hash === `#/r/${code}`) loadRoom(code);
-  else location.hash = `#/r/${code}`;
+  const path = `/r/${code}`;
+  if (location.pathname === path) loadRoom(code);
+  else {
+    history.pushState(null, "", path);
+    route();
+  }
 }
 
 async function createRoom() {
@@ -793,7 +798,7 @@ async function createRoom() {
     state.view = "table";
     state.panel = null;
     state.dialog = "";
-    history.replaceState(null, "", `#/r/${data.code}`);
+    history.replaceState(null, "", `/r/${data.code}`);
     remember(seated.room);
     paint();
     startPoll();
@@ -846,7 +851,7 @@ async function loadRoom(code) {
     state.view = "home";
     state.room = null;
     state.homeError = error.message;
-    history.replaceState(null, "", "#/");
+    history.replaceState(null, "", "/");
     paint();
   }
 }
@@ -1110,9 +1115,10 @@ function prepareIdentity(profile = activeProfile()) {
   state.editingProfileId = profile ? profile.id : "";
 }
 
-function prepareProfileOnboarding() {
+function prepareProfileOnboarding(roomCode = "") {
   if (activeProfile()) return;
   state.onboardingProfile = true;
+  state.pendingRoomCode = roomCode;
   prepareIdentity(null);
   state.dialog = "profile-edit";
 }
@@ -1121,6 +1127,7 @@ function closeProfileEditor() {
   state.dialog = state.onboardingProfile ? "" : "profile";
   state.editingProfileId = "";
   state.onboardingProfile = false;
+  state.pendingRoomCode = "";
   paint();
 }
 
@@ -1193,12 +1200,15 @@ function saveRole() {
     return;
   }
   const onboarding = state.onboardingProfile;
+  const pendingRoomCode = state.pendingRoomCode;
   saveProfile(name, state.pickedAvatar, state.editingProfileId);
   state.dialog = onboarding ? "" : "profile";
   state.editingProfileId = "";
   state.onboardingProfile = false;
+  state.pendingRoomCode = "";
   paint();
-  if (!onboarding) loadProfileHistory();
+  if (pendingRoomCode) openRoom(pendingRoomCode);
+  else if (!onboarding) loadProfileHistory();
 }
 
 async function sendFeedback() {
@@ -1258,8 +1268,8 @@ function onClick(event) {
     state.view = "home";
     state.panel = null;
     state.dialog = "";
-    location.hash = "#/";
-    paint();
+    history.pushState(null, "", "/");
+    route();
   } else if (action === "copy") copyCode();
   else if (action === "share") shareRoom();
   else if (action === "role") openRole();
@@ -1560,7 +1570,9 @@ function route() {
     return;
   }
   document.title = "麻将记分";
-  const match = location.hash.match(/^#\/r\/(\d{5})$/);
+  const legacyMatch = location.hash.match(/^#\/r\/(\d{5})$/);
+  if (legacyMatch) history.replaceState(null, "", `/r/${legacyMatch[1]}`);
+  const match = location.pathname.match(/^\/r\/(\d{5})$/);
   if (!match) {
     stopPoll();
     state.view = "home";
@@ -1569,6 +1581,15 @@ function route() {
     prepareProfileOnboarding();
     paint();
     refreshActiveRoomOnHome();
+    return;
+  }
+  if (!activeProfile()) {
+    stopPoll();
+    state.view = "home";
+    state.panel = null;
+    state.dialog = "";
+    prepareProfileOnboarding(match[1]);
+    paint();
     return;
   }
   if (state.view === "table" && state.code === match[1] && state.room) return;
@@ -1590,6 +1611,7 @@ async function boot() {
   app.addEventListener("submit", onSubmit);
   app.addEventListener("keydown", onKeydown);
   window.addEventListener("hashchange", route);
+  window.addEventListener("popstate", route);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       refreshRoom();

@@ -334,6 +334,9 @@ test("a full table stops at eight and names are stored as text", async () => {
     const adminPage = await fetch(`${base}/admin`);
     assert.equal(adminPage.status, 200);
     assert.match(await adminPage.text(), /麻将记分/);
+    const sharedRoomPage = await fetch(`${base}/r/12345`);
+    assert.equal(sharedRoomPage.status, 200);
+    assert.match(await sharedRoomPage.text(), /麻将记分/);
 
     const ended = await send(base, `/api/rooms/${code}/end`, { method: "POST", token: created.data.hostToken, body: {} });
     assert.equal(ended.status, 200);

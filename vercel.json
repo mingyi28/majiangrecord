@@ -5,6 +5,7 @@
     }
   },
   "rewrites": [
-    { "source": "/admin", "destination": "/" }
+    { "source": "/admin", "destination": "/" },
+    { "source": "/r/:code", "destination": "/" }
   ]
 }
