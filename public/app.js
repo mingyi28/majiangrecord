@@ -1537,7 +1537,7 @@ function renderAdmin() {
             <small>${esc(formatWhen(room.createdAt))}</small>
           </header>
           <ul>${people || "<li><span>还没有人坐下</span></li>"}</ul>
-          <button type="button" class="room-detail-button" data-action="open-admin-room" data-code="${esc(room.code)}">${room.roundCount} 局 · 查看详情</button>
+          <button type="button" class="room-detail-button" data-action="open-admin-room" data-code="${esc(room.code)}">${room.players.length} 人 · ${room.roundCount} 局 · 查看详情</button>
         </article>`;
       }).join("")
     : state.admin ? `<p class="empty-state">${state.adminHideZeroRooms ? "没有包含对局的房间。" : "还没有房间记录。"}</p>` : "";
