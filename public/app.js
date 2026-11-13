@@ -357,8 +357,8 @@ function renderHome() {
   const recents = loadRecents().slice(0, 2);
   const recentHtml = recents.map((item) => `
     <button type="button" class="recent" data-action="open" data-code="${esc(item.code)}">
-      <b>${esc(item.code)}</b>
-      <small>${esc(item.names.join("、") || "还没有人")}</small>
+      <span><b>${esc(item.code)}</b><small>${esc(item.names.join("、") || "还没有人")}</small></span>
+      <i>›</i>
     </button>`).join("");
   return `<div class="screen home">
     <header class="hero">
@@ -370,16 +370,23 @@ function renderHome() {
       <p class="lede">五位数字进同一间，给每人直接填分数。</p>
     </header>
     <div class="body">
-      <button type="button" class="btn primary" data-action="create">开房间</button>
-      <form id="join-form" class="stack">
-        <label for="join-code">房间号</label>
-        <input id="join-code" class="code-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00000" aria-label="五位数字房间号">
-        <button class="btn mint" type="submit">进入</button>
-      </form>
-      ${profile ? `<p class="hint">当前角色：${esc(profile.name)}，开房间时可以直接进入</p>` : `<p class="hint">第一次开房间时，角色会记在这台手机上</p>`}
-      ${recentHtml ? `<div class="recents">${recentHtml}</div>` : ""}
+      <section class="launch-card">
+        <div class="launch-profile">
+          ${profile ? `<span class="avatar">${avatarSvg(profile.avatar)}</span><div><small>以这个角色进入</small><b>${esc(profile.name)}</b></div>` : `<div><small>第一次使用</small><b>先选一个喜欢的角色</b></div>`}
+          <button type="button" class="link" data-action="role">${profile ? "切换" : "设置"}</button>
+        </div>
+        <button type="button" class="btn primary create-button" data-action="create"><span>开房间</span><small>创建房间并邀请朋友</small></button>
+      </section>
+      <section class="join-card">
+        <div class="section-title"><b>加入房间</b><small>输入朋友分享的 5 位房间号</small></div>
+        <form id="join-form" class="join-row">
+          <input id="join-code" class="code-input" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="one-time-code" placeholder="00000" aria-label="五位数字房间号" required>
+          <button class="btn mint" type="submit">进入</button>
+        </form>
+      </section>
+      ${recentHtml ? `<section class="recent-section"><div class="section-title"><b>最近房间</b></div><div class="recents">${recentHtml}</div></section>` : ""}
       <p class="error">${esc(state.homeError)}</p>
-      <button type="button" class="link admin-link" data-action="admin">管理</button>
+      <button type="button" class="link admin-link" data-action="admin">进入管理端</button>
     </div>
   </div>`;
 }
@@ -470,7 +477,7 @@ function renderTable() {
   const count = `${state.room.players.length} 人`;
   const meta = state.room.status === "dissolved" ? "已解散" : state.room.status === "ended" ? "已结束" : count;
   const disband = isHost() && state.room.status !== "dissolved"
-    ? `<button type="button" class="home-link" data-action="ask-disband">解散</button>`
+    ? `<button type="button" class="room-link danger-link" data-action="ask-disband">解散</button>`
     : "";
   return `<div class="screen">
     <header class="top">
@@ -481,11 +488,14 @@ function renderTable() {
       </button>
     </header>
     <div class="room-code-card">
-      <button type="button" data-action="copy" aria-label="复制房间号">
+      <button type="button" class="room-number" data-action="copy" aria-label="复制房间号">
         <small>房间号 · 点击复制</small>
         <strong>${esc(state.code)}</strong>
       </button>
-      ${disband}
+      <div class="room-actions">
+        <button type="button" class="room-link primary-link" data-action="share">分享</button>
+        ${disband}
+      </div>
     </div>
     <div class="body">
       <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
@@ -616,12 +626,15 @@ function paint() {
 async function guard(fn) {
   if (state.busy) return;
   state.busy = true;
+  const app = document.querySelector("#app");
+  if (app) app.setAttribute("aria-busy", "true");
   try {
     await fn();
   } catch (error) {
     toast(error.message || "没有连上牌桌");
   } finally {
     state.busy = false;
+    if (app) app.removeAttribute("aria-busy");
   }
 }
 
@@ -886,10 +899,35 @@ async function copyCode() {
   }
 }
 
+async function shareRoom() {
+  const text = `来一起记分，房间号 ${state.code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "麻将记分", text, url: location.href });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${location.href}`);
+    toast("邀请信息已复制");
+  } catch {
+    toast(`房间号 ${state.code}`);
+  }
+}
+
 function prepareIdentity(profile = activeProfile()) {
   state.draftName = profile ? profile.name : "";
   state.pickedAvatar = profile ? profile.avatar : (state.avatars[0]?.id || "");
   state.editingProfileId = profile ? profile.id : "";
+}
+
+function focusSoon(selector) {
+  requestAnimationFrame(() => {
+    const element = document.querySelector(selector);
+    if (element) element.focus();
+  });
 }
 
 async function loadProfileHistory() {
@@ -996,6 +1034,7 @@ function onClick(event) {
     prepareIdentity();
     state.dialog = "create";
     paint();
+    focusSoon("#identity-name");
   }
   else if (action === "open") openRoom(button.dataset.code || "");
   else if (action === "home") {
@@ -1006,6 +1045,7 @@ function onClick(event) {
     location.hash = "#/";
     paint();
   } else if (action === "copy") copyCode();
+  else if (action === "share") shareRoom();
   else if (action === "role") openRole();
   else if (action === "open-sit") {
     state.panel = "sit";
@@ -1048,10 +1088,12 @@ function onClick(event) {
     prepareIdentity();
     state.dialog = "profile-edit";
     paint();
+    focusSoon("#identity-name");
   } else if (action === "new-profile") {
     prepareIdentity(null);
     state.dialog = "profile-edit";
     paint();
+    focusSoon("#identity-name");
   } else if (action === "save-profile") saveRole();
   else if (action === "switch-profile") {
     setActiveProfile(button.dataset.profile || "");
@@ -1061,6 +1103,7 @@ function onClick(event) {
   } else if (action === "open-feedback") {
     state.dialog = "feedback";
     paint();
+    focusSoon("#feedback-message");
   } else if (action === "back-role") {
     state.dialog = "profile";
     paint();
@@ -1122,6 +1165,11 @@ function onSubmit(event) {
 }
 
 function onKeydown(event) {
+  if (event.key === "Escape" && state.dialog) {
+    state.dialog = "";
+    paint();
+    return;
+  }
   if (event.key !== "Enter") return;
   if (event.target.id === "seat-name") {
     event.preventDefault();
