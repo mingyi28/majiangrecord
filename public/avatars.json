@@ -1,14 +1,14 @@
 [
-  { "id": "bunny", "kind": "cute", "label": "兔子", "ears": "bunny", "face": "#ffffff", "accent": "#7edbe3", "cheek": "#d5f4f6", "bg": "#e7fbfa" },
-  { "id": "cat", "kind": "cute", "label": "小猫", "ears": "cat", "face": "#ffffff", "accent": "#49cdd6", "cheek": "#d7f6f7", "bg": "#f3fffe" },
-  { "id": "bear", "kind": "cute", "label": "小熊", "ears": "bear", "face": "#ffffff", "accent": "#2eb8c4", "cheek": "#d4f3f5", "bg": "#e9fbfa" },
-  { "id": "chick", "kind": "cute", "label": "小鸡", "ears": "chick", "face": "#ffffff", "accent": "#8fe4ea", "cheek": "#d9f7f8", "bg": "#f4fffd", "beak": true },
-  { "id": "puppy", "kind": "cute", "label": "小狗", "ears": "puppy", "face": "#ffffff", "accent": "#3ec6d0", "cheek": "#d5f4f6", "bg": "#edfbfb" },
-  { "id": "fox", "kind": "cute", "label": "小狐", "ears": "fox", "face": "#ffffff", "accent": "#14b8c4", "cheek": "#d2f2f4", "bg": "#e5faf8" },
-  { "id": "panda", "kind": "cute", "label": "熊猫", "ears": "panda", "face": "#ffffff", "accent": "#1f6f78", "cheek": "#d7f6f7", "bg": "#f4fffd" },
-  { "id": "frog", "kind": "cute", "label": "青蛙", "ears": "frog", "face": "#ffffff", "accent": "#5fd4cf", "cheek": "#d8f6f5", "bg": "#e7fbf8" },
-  { "id": "peach", "kind": "cute", "label": "双马尾", "ears": "pigtail", "face": "#ffffff", "accent": "#2ec4c7", "cheek": "#d5f4f6", "bg": "#f3fffe" },
-  { "id": "sprout", "kind": "cute", "label": "新芽", "ears": "sprout", "face": "#ffffff", "accent": "#7edde0", "cheek": "#d9f7f8", "bg": "#e9fcfb" },
-  { "id": "sky", "kind": "cute", "label": "蝴蝶结", "ears": "bow", "face": "#ffffff", "accent": "#3ec9e0", "cheek": "#d4f3f8", "bg": "#eefafd" },
-  { "id": "sunny", "kind": "cute", "label": "小帽", "ears": "cap", "face": "#ffffff", "accent": "#12b7c4", "cheek": "#d5f4f6", "bg": "#f4fffd" }
+  { "id": "bunny", "kind": "cute", "label": "草莓兔", "ears": "bunny", "face": "#fffafc", "accent": "#ff7da8", "cheek": "#ffb8cf", "bg": "#ffe3ee" },
+  { "id": "cat", "kind": "cute", "label": "橘子猫", "ears": "cat", "face": "#fffaf2", "accent": "#ff9d52", "cheek": "#ffbfca", "bg": "#ffe6c9" },
+  { "id": "bear", "kind": "cute", "label": "蜂蜜熊", "ears": "bear", "face": "#fff8e9", "accent": "#d99b62", "cheek": "#ffc5c8", "bg": "#f9dfb7" },
+  { "id": "chick", "kind": "cute", "label": "太阳鸡", "ears": "chick", "face": "#fffdf1", "accent": "#ffd447", "cheek": "#ffb9c7", "bg": "#fff0a9", "beak": true },
+  { "id": "puppy", "kind": "cute", "label": "奶油狗", "ears": "puppy", "face": "#fffdf9", "accent": "#bd8b68", "cheek": "#ffc1ce", "bg": "#ead9c9" },
+  { "id": "fox", "kind": "cute", "label": "晚霞狐", "ears": "fox", "face": "#fff8ed", "accent": "#ff714d", "cheek": "#ffb5c2", "bg": "#ffd5bf" },
+  { "id": "panda", "kind": "cute", "label": "竹叶熊猫", "ears": "panda", "face": "#fffefb", "accent": "#48525f", "cheek": "#ffb9c9", "bg": "#d9f2dc" },
+  { "id": "frog", "kind": "cute", "label": "荷叶蛙", "ears": "frog", "face": "#f7ffe9", "accent": "#72ce62", "cheek": "#ffb6c5", "bg": "#d7f4bd" },
+  { "id": "peach", "kind": "cute", "label": "樱桃女孩", "ears": "pigtail", "face": "#fff8f1", "accent": "#eb5d86", "cheek": "#ffb6cb", "bg": "#ffe0e8" },
+  { "id": "sprout", "kind": "cute", "label": "薄荷新芽", "ears": "sprout", "face": "#fffaf4", "accent": "#55c995", "cheek": "#ffbdca", "bg": "#d6f6e6" },
+  { "id": "sky", "kind": "cute", "label": "天空蝴蝶结", "ears": "bow", "face": "#fffafe", "accent": "#609eff", "cheek": "#ffbdd1", "bg": "#dce9ff" },
+  { "id": "sunny", "kind": "cute", "label": "葡萄帽", "ears": "cap", "face": "#fff9ef", "accent": "#8b6de8", "cheek": "#ffbdcb", "bg": "#e8ddff" }
 ]

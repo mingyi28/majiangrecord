@@ -234,6 +234,17 @@ test("a full table stops at eight and names are stored as text", async () => {
     const wrong = await send(base, "/api/admin/overview", { token: "not-the-password" });
     assert.equal(wrong.status, 401);
 
+    const emptyFeedback = await send(base, "/api/feedback", { method: "POST", body: { message: " " } });
+    assert.equal(emptyFeedback.status, 400);
+    const feedback = await send(base, "/api/feedback", {
+      method: "POST",
+      body: { name: "阿明", message: "希望可以导出战绩", roomCode: code },
+    });
+    assert.equal(feedback.status, 201);
+    const withFeedback = await send(base, "/api/admin/overview", { token: "table-admin" });
+    assert.equal(withFeedback.data.feedback[0].message, "希望可以导出战绩");
+    assert.equal(withFeedback.data.feedback[0].roomCode, code);
+
     const leaked = await fetch(`${base}/..%2fpackage.json`);
     assert.equal(leaked.status, 404);
     const serverFile = await fetch(`${base}/server.js`);

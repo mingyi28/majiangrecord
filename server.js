@@ -107,6 +107,14 @@ function cleanNote(value) {
   return note;
 }
 
+function cleanFeedback(value) {
+  const message = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!message) throw new AppError(400, "请写下你的意见");
+  if ([...message].length > 300) throw new AppError(400, "意见最多 300 个字");
+  if (/[\u0000-\u001f\u007f]/.test(message)) throw new AppError(400, "意见里有不能用的字符");
+  return message;
+}
+
 function staticFile(urlPath) {
   let decoded;
   try {
@@ -190,6 +198,18 @@ function createApp(store) {
     if (pathname === "/api/admin/overview" && req.method === "GET") {
       if (!(await isAdmin(bearer(req)))) throw new AppError(401, "口令不对");
       send(res, 200, await store.adminOverview());
+      return;
+    }
+
+    if (pathname === "/api/feedback" && req.method === "POST") {
+      const body = await readJson(req);
+      const name = body.name ? cleanName(body.name) : "";
+      const roomCode = /^\d{5}$/.test(String(body.roomCode || "")) ? String(body.roomCode) : null;
+      send(res, 201, await store.addFeedback({
+        name,
+        roomCode,
+        message: cleanFeedback(body.message),
+      }));
       return;
     }
 

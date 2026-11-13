@@ -46,7 +46,30 @@ button { cursor: pointer; }
   overflow: hidden;
 }
 
-.hero { flex: none; padding-top: 8px; }
+.hero { position: relative; flex: none; padding-top: 8px; }
+
+.role-button {
+  border: 0;
+  border-radius: 999px;
+  background: white;
+  min-height: 40px;
+  padding: 4px 10px 4px 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cyan-deep);
+  font-weight: 800;
+  box-shadow: var(--shadow);
+}
+
+.hero > .role-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.role-button .avatar { width: 32px; height: 32px; }
+.role-button.compact { padding: 3px 8px 3px 3px; min-height: 38px; }
 
 .eyebrow {
   margin: 0;
@@ -181,6 +204,47 @@ input:focus { border-color: var(--cyan); }
   font-weight: 700;
 }
 
+.room-code-card {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.room-code-card > button:first-child {
+  flex: 1;
+  border: 0;
+  border-radius: 20px;
+  background: white;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.room-code-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.room-code-card strong {
+  display: block;
+  color: var(--cyan-deep);
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.2em;
+}
+
+.room-code-card .home-link {
+  border: 0;
+  border-radius: 999px;
+  background: white;
+  min-height: 40px;
+  padding: 0 12px;
+  font-weight: 800;
+}
+
 .players {
   list-style: none;
   margin: 0;
@@ -310,8 +374,8 @@ input:focus { border-color: var(--cyan); }
 
 .picks {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
   align-content: start;
 }
 
@@ -330,17 +394,6 @@ input:focus { border-color: var(--cyan); }
 }
 
 .pick[aria-pressed="true"] .avatar { outline: 3px solid var(--cyan); outline-offset: 1px; }
-
-.pick small {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--muted);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .dock {
   flex: none;
@@ -367,6 +420,8 @@ input:focus { border-color: var(--cyan); }
 
 .modal {
   width: min(320px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
   background: var(--paper);
   border-radius: 24px;
   padding: 22px 18px 16px;
@@ -377,6 +432,84 @@ input:focus { border-color: var(--cyan); }
 .modal p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .modal-actions .btn { flex: 1; }
+
+.identity-modal { width: min(360px, 100%); }
+.identity-modal .name-input { margin-top: 14px; }
+.identity-modal .picks { margin-top: 16px; }
+
+textarea {
+  width: 100%;
+  min-height: 130px;
+  margin-top: 14px;
+  resize: vertical;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  outline: none;
+  font: inherit;
+  color: var(--ink);
+}
+
+textarea:focus { border-color: var(--cyan); }
+
+.modal-heading, .profile-main, .profile-choice, .profile-records > div {
+  display: flex;
+  align-items: center;
+}
+
+.modal-heading { justify-content: space-between; }
+.close-button { border: 0; background: transparent; font-size: 28px; color: var(--muted); }
+.profile-main { gap: 10px; margin-top: 12px; }
+.profile-main .avatar { width: 56px; height: 56px; }
+.profile-main div { flex: 1; }
+.profile-main b, .profile-main small { display: block; }
+.profile-main small { color: var(--muted); margin-top: 2px; }
+.profile-modal h3 { margin: 16px 0 8px; font-size: 15px; }
+
+.profile-choices {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-top: 14px;
+  padding: 3px;
+}
+
+.profile-choice {
+  flex: none;
+  gap: 5px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  padding: 4px 10px 4px 4px;
+  font-weight: 700;
+}
+
+.profile-choice.active { border-color: var(--cyan); background: #ecfbfb; }
+.profile-choice .avatar { width: 34px; height: 34px; }
+.add-profile { display: block; margin-top: 4px; }
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.profile-stats > div {
+  border-radius: 14px;
+  background: #effbfb;
+  padding: 9px;
+  text-align: center;
+}
+
+.profile-stats b, .profile-stats span { display: block; }
+.profile-stats b { font-size: 20px; color: var(--cyan-deep); }
+.profile-stats span { font-size: 11px; color: var(--muted); }
+.profile-records { max-height: 130px; overflow: auto; margin-top: 8px; }
+.profile-records > div { gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.profile-records span { flex: 1; color: var(--muted); font-size: 12px; }
+.profile-records strong.up { color: #ef5d7a; }
+.profile-records strong.down { color: #537078; }
+.feedback-entry { width: 100%; margin-top: 14px; }
 
 .toast {
   position: fixed;
@@ -410,10 +543,14 @@ input:focus { border-color: var(--cyan); }
 .room-card header small { margin-left: auto; }
 .room-card ul { list-style: none; margin: 8px 0; padding: 0; }
 .room-card li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.admin-section { margin: 10px 0 0; }
+.feedback-card { background: white; border-radius: 16px; padding: 12px; box-shadow: var(--shadow); }
+.feedback-card header { display: flex; justify-content: space-between; gap: 8px; }
+.feedback-card small { color: var(--muted); }
+.feedback-card p { margin: 8px 0 0; line-height: 1.45; }
 
 @media (max-height: 680px) {
   h1 { font-size: 28px; }
   .home .lede { display: none; }
   .player { padding: 4px 8px; }
-  .pick small { display: none; }
 }

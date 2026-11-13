@@ -16,6 +16,9 @@ const state = {
   adminMode: null,
   adminError: "",
   adminOpen: "",
+  profileHistory: null,
+  profileLoading: false,
+  editingProfileId: "",
   undoArmed: false,
   homeError: "",
   busy: false,
@@ -89,7 +92,7 @@ function avatarButton(id) {
   const avatar = state.avatars.find((item) => item.id === id);
   const label = avatar ? avatar.label : "头像";
   const pressed = state.pickedAvatar === id;
-  return `<button type="button" class="pick" data-action="pick" data-avatar="${esc(id)}" aria-pressed="${pressed ? "true" : "false"}" aria-label="${esc(label)}"><span class="avatar">${avatarSvg(id)}</span><small>${esc(label)}</small></button>`;
+  return `<button type="button" class="pick" data-action="pick" data-avatar="${esc(id)}" aria-pressed="${pressed ? "true" : "false"}" aria-label="${esc(label)}"><span class="avatar">${avatarSvg(id)}</span></button>`;
 }
 
 function digits(value) {
@@ -118,20 +121,76 @@ function writeJsonStorage(key, value) {
   }
 }
 
-function loadNickname() {
+function newLocalId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return `p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function loadProfiles() {
+  const saved = readJsonStorage("mj.profiles", []);
+  const profiles = Array.isArray(saved)
+    ? saved.filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && typeof item.avatar === "string")
+    : [];
+  if (profiles.length) return profiles.slice(0, 12);
   try {
-    return String(localStorage.getItem("mj.nickname") || "").slice(0, 12);
+    const name = String(localStorage.getItem("mj.nickname") || "").trim().slice(0, 12);
+    if (!name) return [];
+    const migrated = [{ id: newLocalId(), name, avatar: "bunny", seats: {} }];
+    writeJsonStorage("mj.profiles", migrated);
+    localStorage.setItem("mj.activeProfile", migrated[0].id);
+    return migrated;
   } catch {
-    return "";
+    return [];
   }
 }
 
-function saveNickname(name) {
+function activeProfile() {
+  const profiles = loadProfiles();
+  let id = "";
+  try {
+    id = localStorage.getItem("mj.activeProfile") || "";
+  } catch {
+    // Use the first saved role.
+  }
+  return profiles.find((item) => item.id === id) || profiles[0] || null;
+}
+
+function setActiveProfile(id) {
+  try {
+    localStorage.setItem("mj.activeProfile", id);
+  } catch {
+    // The selected role still works for this visit.
+  }
+}
+
+function saveProfile(name, avatar, id = "") {
+  const profiles = loadProfiles();
+  let profile = profiles.find((item) => item.id === id);
+  if (!profile) {
+    profile = { id: newLocalId(), name, avatar, seats: {} };
+    profiles.push(profile);
+  } else {
+    profile.name = name;
+    profile.avatar = avatar;
+    if (!profile.seats || typeof profile.seats !== "object") profile.seats = {};
+  }
+  writeJsonStorage("mj.profiles", profiles.slice(0, 12));
+  setActiveProfile(profile.id);
   try {
     localStorage.setItem("mj.nickname", name);
   } catch {
-    // The seat is already saved on the server.
+    // Kept in the profile cache when available.
   }
+  return profile;
+}
+
+function rememberSeat(profileId, code, playerId) {
+  const profiles = loadProfiles();
+  const profile = profiles.find((item) => item.id === profileId);
+  if (!profile) return;
+  if (!profile.seats || typeof profile.seats !== "object") profile.seats = {};
+  profile.seats[code] = playerId;
+  writeJsonStorage("mj.profiles", profiles);
 }
 
 function loadSession(code) {
@@ -294,7 +353,7 @@ function played(id) {
 }
 
 function renderHome() {
-  const nickname = loadNickname();
+  const profile = activeProfile();
   const recents = loadRecents().slice(0, 2);
   const recentHtml = recents.map((item) => `
     <button type="button" class="recent" data-action="open" data-code="${esc(item.code)}">
@@ -303,18 +362,21 @@ function renderHome() {
     </button>`).join("");
   return `<div class="screen home">
     <header class="hero">
-      <p class="eyebrow">春天开一桌</p>
+      <button type="button" class="role-button" data-action="role">
+        ${profile ? `<span class="avatar">${avatarSvg(profile.avatar)}</span><span>${esc(profile.name)}</span>` : "角色"}
+      </button>
+      <p class="eyebrow">轻松开房间</p>
       <h1>麻将记分</h1>
       <p class="lede">五位数字进同一间，给每人直接填分数。</p>
     </header>
     <div class="body">
-      <button type="button" class="btn primary" data-action="create">开一桌</button>
+      <button type="button" class="btn primary" data-action="create">开房间</button>
       <form id="join-form" class="stack">
         <label for="join-code">房间号</label>
         <input id="join-code" class="code-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00000" aria-label="五位数字房间号">
         <button class="btn mint" type="submit">进入</button>
       </form>
-      ${nickname ? `<p class="hint">称呼已记住：${esc(nickname)}，下次直接用</p>` : `<p class="hint">第一次坐下后，称呼会记在这台手机上</p>`}
+      ${profile ? `<p class="hint">当前角色：${esc(profile.name)}，开房间时可以直接进入</p>` : `<p class="hint">第一次开房间时，角色会记在这台手机上</p>`}
       ${recentHtml ? `<div class="recents">${recentHtml}</div>` : ""}
       <p class="error">${esc(state.homeError)}</p>
       <button type="button" class="link admin-link" data-action="admin">管理</button>
@@ -413,10 +475,18 @@ function renderTable() {
   return `<div class="screen">
     <header class="top">
       <button type="button" class="home-link" data-action="home">首页</button>
-      <button type="button" class="code-chip" data-action="copy" aria-label="复制房间号">${esc(state.code)}</button>
-      ${disband}
       <span class="meta">${meta}</span>
+      <button type="button" class="role-button compact" data-action="role" aria-label="查看角色">
+        ${activeProfile() ? `<span class="avatar">${avatarSvg(activeProfile().avatar)}</span><span>角色</span>` : "角色"}
+      </button>
     </header>
+    <div class="room-code-card">
+      <button type="button" data-action="copy" aria-label="复制房间号">
+        <small>房间号 · 点击复制</small>
+        <strong>${esc(state.code)}</strong>
+      </button>
+      ${disband}
+    </div>
     <div class="body">
       <ul class="players">${state.room.players.map(renderPlayer).join("")}</ul>
       ${state.panel === "record" ? "" : renderHistory()}
@@ -425,7 +495,90 @@ function renderTable() {
   </div>`;
 }
 
+function renderIdentityEditor({ title, copy, action, buttonText }) {
+  return `<div class="modal-root">
+    <div class="modal identity-modal" role="dialog" aria-modal="true">
+      <h2>${title}</h2>
+      ${copy ? `<p>${copy}</p>` : ""}
+      <input id="identity-name" class="name-input" maxlength="12" autocomplete="nickname" placeholder="你的称呼" value="${esc(state.draftName)}" aria-label="称呼">
+      <div class="picks roomy">${state.avatars.map((avatar) => avatarButton(avatar.id)).join("")}</div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-action="cancel-dialog">取消</button>
+        <button type="button" class="btn primary" data-action="${action}">${buttonText}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderRoleModal() {
+  const profile = activeProfile();
+  const profiles = loadProfiles();
+  const history = state.profileHistory;
+  const choices = profiles.map((item) => `
+    <button type="button" class="profile-choice${profile && item.id === profile.id ? " active" : ""}" data-action="switch-profile" data-profile="${esc(item.id)}">
+      <span class="avatar">${avatarSvg(item.avatar)}</span>
+      <span>${esc(item.name)}</span>
+    </button>`).join("");
+  const stats = history
+    ? `<div class="profile-stats">
+        <div><b>${history.rooms}</b><span>房间</span></div>
+        <div><b>${history.rounds}</b><span>对局</span></div>
+        <div><b>${formatDelta(history.total)}</b><span>总分</span></div>
+      </div>`
+    : `<p class="hint">${state.profileLoading ? "正在整理战绩…" : "还没有历史战绩"}</p>`;
+  const records = history && history.records.length
+    ? `<div class="profile-records">${history.records.map((item) => `
+        <div><b>${esc(item.code)}</b><span>${item.rounds} 局</span><strong class="${item.total > 0 ? "up" : item.total < 0 ? "down" : ""}">${esc(formatDelta(item.total))}</strong></div>
+      `).join("")}</div>`
+    : "";
+  return `<div class="modal-root">
+    <div class="modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="role-title">
+      <div class="modal-heading">
+        <h2 id="role-title">我的角色</h2>
+        <button type="button" class="close-button" data-action="cancel-dialog" aria-label="关闭">×</button>
+      </div>
+      ${profile ? `<div class="profile-main"><span class="avatar">${avatarSvg(profile.avatar)}</span><div><b>${esc(profile.name)}</b><small>本机角色</small></div><button type="button" class="link" data-action="edit-profile">修改</button></div>` : `<p class="hint">还没有角色，先新建一个吧。</p>`}
+      ${choices ? `<div class="profile-choices">${choices}</div>` : ""}
+      <button type="button" class="link add-profile" data-action="new-profile">＋ 新角色</button>
+      <h3>历史战绩</h3>
+      ${stats}
+      ${records}
+      <button type="button" class="btn mint feedback-entry" data-action="open-feedback">意见反馈</button>
+    </div>
+  </div>`;
+}
+
 function renderModal() {
+  if (state.dialog === "create") {
+    return renderIdentityEditor({
+      title: "开房间",
+      copy: "确认你的称呼和头像，进入后把房间号告诉朋友。",
+      action: "confirm-create",
+      buttonText: "进入房间",
+    });
+  }
+  if (state.dialog === "profile") return renderRoleModal();
+  if (state.dialog === "profile-edit") {
+    return renderIdentityEditor({
+      title: state.editingProfileId ? "修改角色" : "新角色",
+      copy: "",
+      action: "save-profile",
+      buttonText: "保存",
+    });
+  }
+  if (state.dialog === "feedback") {
+    return `<div class="modal-root">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+        <h2 id="feedback-title">意见反馈</h2>
+        <p>你的建议会交给管理端查看。</p>
+        <textarea id="feedback-message" maxlength="300" placeholder="写下你希望改进的地方"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-action="back-role">返回</button>
+          <button type="button" class="btn primary" data-action="send-feedback">提交</button>
+        </div>
+      </div>
+    </div>`;
+  }
   if (state.dialog === "end") {
     return `<div class="modal-root">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title">
@@ -455,7 +608,7 @@ function renderModal() {
 
 function paint() {
   const app = document.querySelector("#app");
-  const view = state.view === "admin" ? renderAdmin() : state.view === "home" ? renderHome() : `${renderTable()}${renderModal()}`;
+  const view = state.view === "admin" ? renderAdmin() : state.view === "home" ? `${renderHome()}${renderModal()}` : `${renderTable()}${renderModal()}`;
   app.innerHTML = view;
   if (state.panel === "record") updateSum();
 }
@@ -484,23 +637,37 @@ function openRoom(code) {
 }
 
 async function createRoom() {
+  const name = cleanDraft();
+  if (!name) {
+    toast("先写一个称呼");
+    return;
+  }
+  if (!state.pickedAvatar) {
+    toast("选一个头像");
+    return;
+  }
   await guard(async () => {
+    const profile = saveProfile(name, state.pickedAvatar, state.editingProfileId || activeProfile()?.id || "");
     const data = await request("/api/rooms", { method: "POST", body: "{}" });
     state.code = data.code;
     state.session = { hostToken: data.hostToken, players: {} };
     saveSession();
     state.room = data.room;
+    const seated = await request(`/api/rooms/${data.code}/players`, {
+      method: "POST",
+      body: JSON.stringify({ name, avatar: state.pickedAvatar }),
+    });
+    state.session.players[seated.player.id] = seated.token;
+    rememberSeat(profile.id, data.code, seated.player.id);
+    saveSession();
+    state.room = seated.room;
     state.view = "table";
-    state.panel = "sit";
-    state.draftName = loadNickname();
-    state.pickedAvatar = state.avatars[0] ? state.avatars[0].id : "";
+    state.panel = null;
     state.dialog = "";
     history.replaceState(null, "", `#/r/${data.code}`);
-    remember(data.room);
+    remember(seated.room);
     paint();
     startPoll();
-    const input = document.querySelector("#seat-name");
-    if (input) input.focus();
   });
 }
 
@@ -583,13 +750,14 @@ async function saveSit() {
     return;
   }
   await guard(async () => {
+    const profile = saveProfile(name, state.pickedAvatar, activeProfile()?.id || "");
     const data = await request(`/api/rooms/${state.code}/players`, {
       method: "POST",
       body: JSON.stringify({ name, avatar: state.pickedAvatar }),
     });
     state.session.players[data.player.id] = data.token;
+    rememberSeat(profile.id, state.code, data.player.id);
     saveSession();
-    saveNickname(name);
     state.room = data.room;
     state.panel = null;
     remember(data.room);
@@ -609,7 +777,8 @@ async function saveEdit() {
       method: "PATCH",
       body: JSON.stringify({ name, avatar: state.pickedAvatar }),
     });
-    saveNickname(name);
+    const profile = activeProfile();
+    if (profile && localIds().has(state.editingId)) saveProfile(name, state.pickedAvatar, profile.id);
     state.room = data.room;
     state.panel = null;
     remember(data.room);
@@ -717,6 +886,102 @@ async function copyCode() {
   }
 }
 
+function prepareIdentity(profile = activeProfile()) {
+  state.draftName = profile ? profile.name : "";
+  state.pickedAvatar = profile ? profile.avatar : (state.avatars[0]?.id || "");
+  state.editingProfileId = profile ? profile.id : "";
+}
+
+async function loadProfileHistory() {
+  const profile = activeProfile();
+  state.profileHistory = null;
+  if (!profile) {
+    state.profileLoading = false;
+    paint();
+    return;
+  }
+  state.profileLoading = true;
+  paint();
+  const sessions = readJsonStorage("mj.sessions", {});
+  const recents = loadRecents().slice(0, 8);
+  const records = [];
+  await Promise.all(recents.map(async (recent) => {
+    try {
+      const data = await send(`/api/rooms/${recent.code}`, {}, "");
+      const room = data.room;
+      const localIdsForRoom = new Set(Object.keys(sessions[recent.code]?.players || {}));
+      const rememberedId = profile.seats && profile.seats[recent.code];
+      const player = room.players.find((item) => item.id === rememberedId)
+        || room.players.find((item) => localIdsForRoom.has(item.id) && item.name === profile.name && item.avatar === profile.avatar);
+      if (!player) return;
+      records.push({
+        code: room.code,
+        total: player.total,
+        rounds: room.rounds.filter((round) => Object.prototype.hasOwnProperty.call(round.deltas || {}, player.id)).length,
+        at: Date.parse(room.createdAt) || 0,
+      });
+    } catch {
+      // A deleted or unavailable room is skipped from this phone's history.
+    }
+  }));
+  records.sort((a, b) => b.at - a.at);
+  state.profileHistory = {
+    rooms: records.length,
+    rounds: records.reduce((sum, item) => sum + item.rounds, 0),
+    total: records.reduce((sum, item) => sum + item.total, 0),
+    records,
+  };
+  state.profileLoading = false;
+  paint();
+}
+
+function openRole() {
+  state.dialog = "profile";
+  state.profileHistory = null;
+  paint();
+  loadProfileHistory();
+}
+
+function saveRole() {
+  const name = cleanDraft();
+  if (!name) {
+    toast("先写一个称呼");
+    return;
+  }
+  if (!state.pickedAvatar) {
+    toast("选一个头像");
+    return;
+  }
+  saveProfile(name, state.pickedAvatar, state.editingProfileId);
+  state.dialog = "profile";
+  state.editingProfileId = "";
+  paint();
+  loadProfileHistory();
+}
+
+async function sendFeedback() {
+  const field = document.querySelector("#feedback-message");
+  const message = field ? field.value.trim() : "";
+  if (!message) {
+    toast("请写下你的意见");
+    return;
+  }
+  await guard(async () => {
+    const profile = activeProfile();
+    await send("/api/feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        name: profile?.name || "",
+        roomCode: state.view === "table" ? state.code : "",
+        message,
+      }),
+    }, "");
+    state.dialog = "profile";
+    paint();
+    toast("谢谢你的建议");
+  });
+}
+
 function onClick(event) {
   const button = event.target.closest("[data-action]");
   if (!button || !document.querySelector("#app").contains(button)) {
@@ -727,7 +992,11 @@ function onClick(event) {
     return;
   }
   const action = button.dataset.action;
-  if (action === "create") createRoom();
+  if (action === "create") {
+    prepareIdentity();
+    state.dialog = "create";
+    paint();
+  }
   else if (action === "open") openRoom(button.dataset.code || "");
   else if (action === "home") {
     stopPoll();
@@ -737,10 +1006,10 @@ function onClick(event) {
     location.hash = "#/";
     paint();
   } else if (action === "copy") copyCode();
+  else if (action === "role") openRole();
   else if (action === "open-sit") {
     state.panel = "sit";
-    state.draftName = loadNickname();
-    state.pickedAvatar = state.avatars[0] ? state.avatars[0].id : "";
+    prepareIdentity();
     paint();
     const input = document.querySelector("#seat-name");
     if (input) input.focus();
@@ -774,6 +1043,28 @@ function onClick(event) {
     if (input) input.value = next;
     updateSum();
   } else if (action === "commit") commitScores();
+  else if (action === "confirm-create") createRoom();
+  else if (action === "edit-profile") {
+    prepareIdentity();
+    state.dialog = "profile-edit";
+    paint();
+  } else if (action === "new-profile") {
+    prepareIdentity(null);
+    state.dialog = "profile-edit";
+    paint();
+  } else if (action === "save-profile") saveRole();
+  else if (action === "switch-profile") {
+    setActiveProfile(button.dataset.profile || "");
+    state.profileHistory = null;
+    paint();
+    loadProfileHistory();
+  } else if (action === "open-feedback") {
+    state.dialog = "feedback";
+    paint();
+  } else if (action === "back-role") {
+    state.dialog = "profile";
+    paint();
+  } else if (action === "send-feedback") sendFeedback();
   else if (action === "ask-end") {
     state.dialog = "end";
     paint();
@@ -803,7 +1094,7 @@ function onInput(event) {
     if (next !== event.target.value) event.target.value = next;
     return;
   }
-  if (event.target.id === "seat-name") {
+  if (event.target.id === "seat-name" || event.target.id === "identity-name") {
     state.draftName = event.target.value.slice(0, 12);
     return;
   }
@@ -836,6 +1127,10 @@ function onKeydown(event) {
     event.preventDefault();
     if (state.panel === "edit") saveEdit();
     else saveSit();
+  } else if (event.target.id === "identity-name") {
+    event.preventDefault();
+    if (state.dialog === "create") createRoom();
+    else saveRole();
   } else if (event.target.classList.contains("score-input")) {
     event.preventDefault();
     commitScores();
@@ -877,6 +1172,7 @@ function renderAdmin() {
       </div>`
     : "";
   const rooms = (state.admin && state.admin.rooms) || [];
+  const feedback = (state.admin && state.admin.feedback) || [];
   const list = rooms.length
     ? rooms.map((room) => {
         const open = state.adminOpen === room.code;
@@ -896,6 +1192,13 @@ function renderAdmin() {
         </article>`;
       }).join("")
     : state.admin ? `<p class="hint">还没有牌桌记录。</p>` : "";
+  const feedbackList = feedback.length
+    ? `<h3 class="admin-section">意见反馈</h3>${feedback.map((item) => `
+        <article class="feedback-card">
+          <header><b>${esc(item.name || "匿名")}</b><small>${esc(formatWhen(item.createdAt))}${item.roomCode ? ` · ${esc(item.roomCode)}` : ""}</small></header>
+          <p>${esc(item.message)}</p>
+        </article>`).join("")}`
+    : "";
   let gate = "";
   if (!state.admin) {
     if (state.adminMode && state.adminMode.unavailable) {
@@ -924,6 +1227,7 @@ function renderAdmin() {
       <p class="lede">每桌的分数和汇总。</p>
       ${cards}
       ${list}
+      ${feedbackList}
       ${gate}
       <p class="error">${esc(state.adminError)}</p>
     </div>
