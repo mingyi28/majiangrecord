@@ -46,32 +46,38 @@ function safeColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#fff7fb";
 }
 
-function earsMarkup(kind, accent, face) {
-  switch (kind) {
-    case "bunny":
-      return `<ellipse cx="26" cy="16" rx="6" ry="13" fill="${accent}"/><ellipse cx="54" cy="16" rx="6" ry="13" fill="${accent}"/><ellipse cx="26" cy="16" rx="3" ry="8" fill="${face}"/><ellipse cx="54" cy="16" rx="3" ry="8" fill="${face}"/>`;
+function animalMarkup(avatar) {
+  const face = safeColor(avatar.face);
+  const accent = safeColor(avatar.accent);
+  const detail = safeColor(avatar.detail);
+  const cheek = safeColor(avatar.cheek);
+  const dark = "#3d4650";
+  const shine = `<circle cx="31.5" cy="39.5" r="1.25" fill="#fff"/><circle cx="48.5" cy="39.5" r="1.25" fill="#fff"/>`;
+  switch (avatar.species) {
+    case "rabbit":
+      return `<ellipse cx="27" cy="18" rx="7" ry="16" fill="${face}" transform="rotate(-7 27 18)"/><ellipse cx="53" cy="18" rx="7" ry="16" fill="${face}" transform="rotate(7 53 18)"/><ellipse cx="27" cy="18" rx="3.2" ry="11" fill="${detail}" transform="rotate(-7 27 18)"/><ellipse cx="53" cy="18" rx="3.2" ry="11" fill="${detail}" transform="rotate(7 53 18)"/><ellipse cx="40" cy="46" rx="23" ry="22" fill="${face}"/><ellipse cx="40" cy="52" rx="12" ry="9" fill="#fff9f7"/><ellipse cx="31" cy="41" rx="3.2" ry="4.2" fill="${dark}"/><ellipse cx="49" cy="41" rx="3.2" ry="4.2" fill="${dark}"/>${shine}<path d="M36 49q4-4 8 0-1 4-4 4t-4-4z" fill="${accent}"/><path d="M40 53v3m0 0q-4 4-7 0m7 0q4 4 7 0" fill="none" stroke="#a66f78" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="25" cy="50" rx="4" ry="2" fill="${cheek}"/><ellipse cx="55" cy="50" rx="4" ry="2" fill="${cheek}"/>`;
     case "cat":
-      return `<path d="M24 34 L30 12 L40 30 Z" fill="${accent}"/><path d="M56 34 L50 12 L40 30 Z" fill="${accent}"/>`;
+      return `<path d="M18 36 23 13l16 14M62 36 57 13 41 27" fill="${accent}" stroke="${dark}" stroke-width="1.2" stroke-linejoin="round"/><path d="m23 17 3 13 9-5M57 17l-3 13-9-5" fill="${detail}"/><ellipse cx="40" cy="44" rx="23" ry="22" fill="${face}"/><path d="M27 31q13-8 26 0" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/><path d="M25 38h8M55 38h-8" stroke="${accent}" stroke-width="2" stroke-linecap="round"/><ellipse cx="31" cy="41" rx="3.5" ry="4.4" fill="${dark}"/><ellipse cx="49" cy="41" rx="3.5" ry="4.4" fill="${dark}"/>${shine}<path d="m36 49 4-2 4 2-4 4z" fill="${detail}"/><path d="M40 53q-4 4-7 1m7-1q4 4 7 1M30 51l-12-2m12 6-12 2m32-6 12-2m-12 6 12 2" fill="none" stroke="#7e6a66" stroke-width="1.1" stroke-linecap="round"/>`;
     case "bear":
-      return `<circle cx="22" cy="24" r="9" fill="${accent}"/><circle cx="58" cy="24" r="9" fill="${accent}"/>`;
+      return `<circle cx="21" cy="25" r="10" fill="${accent}"/><circle cx="59" cy="25" r="10" fill="${accent}"/><circle cx="21" cy="25" r="5" fill="${detail}"/><circle cx="59" cy="25" r="5" fill="${detail}"/><ellipse cx="40" cy="45" rx="25" ry="23" fill="${face}"/><ellipse cx="40" cy="52" rx="13" ry="10" fill="#fff4dd"/><ellipse cx="31" cy="40" rx="3.2" ry="4" fill="${dark}"/><ellipse cx="49" cy="40" rx="3.2" ry="4" fill="${dark}"/>${shine}<ellipse cx="40" cy="49" rx="5" ry="3.6" fill="${accent}"/><path d="M40 52v3m0 0q-4 3-7 0m7 0q4 3 7 0" fill="none" stroke="${dark}" stroke-width="1.4" stroke-linecap="round"/><path d="M26 33q4-5 8-3M54 33q-4-5-8-3" fill="none" stroke="${accent}" stroke-width="1.5" stroke-linecap="round"/>`;
     case "chick":
-      return `<ellipse cx="24" cy="20" rx="8" ry="5" fill="${accent}" transform="rotate(-24 24 20)"/><ellipse cx="56" cy="20" rx="8" ry="5" fill="${accent}" transform="rotate(24 56 20)"/>`;
-    case "puppy":
-      return `<ellipse cx="18" cy="30" rx="8" ry="12" fill="${accent}" transform="rotate(-20 18 30)"/><ellipse cx="62" cy="30" rx="8" ry="12" fill="${accent}" transform="rotate(20 62 30)"/>`;
+      return `<ellipse cx="40" cy="47" rx="24" ry="23" fill="${face}"/><path d="M33 25q3-10 7 0 5-9 7 2" fill="${accent}" stroke="${accent}" stroke-width="3" stroke-linecap="round"/><path d="M19 47q-9 3-7 12 8 0 12-8M61 47q9 3 7 12-8 0-12-8" fill="${accent}"/><ellipse cx="31" cy="41" rx="3" ry="4" fill="${dark}"/><ellipse cx="49" cy="41" rx="3" ry="4" fill="${dark}"/>${shine}<path d="m33 49 7-5 7 5-7 6z" fill="${detail}"/><ellipse cx="25" cy="49" rx="4.5" ry="2.2" fill="${cheek}"/><ellipse cx="55" cy="49" rx="4.5" ry="2.2" fill="${cheek}"/><path d="M30 64h-6m26 0h6" stroke="${detail}" stroke-width="2" stroke-linecap="round"/>`;
+    case "dog":
+      return `<ellipse cx="18" cy="35" rx="10" ry="17" fill="${accent}" transform="rotate(-16 18 35)"/><ellipse cx="62" cy="35" rx="10" ry="17" fill="${accent}" transform="rotate(16 62 35)"/><ellipse cx="40" cy="45" rx="24" ry="22" fill="${face}"/><path d="M25 30q8-8 15 0v16q-12 2-15-16z" fill="${detail}" opacity=".9"/><ellipse cx="31" cy="41" rx="3.2" ry="4.2" fill="${dark}"/><ellipse cx="49" cy="41" rx="3.2" ry="4.2" fill="${dark}"/>${shine}<ellipse cx="40" cy="51" rx="13" ry="9" fill="#fff7e9"/><ellipse cx="40" cy="48" rx="5" ry="3.5" fill="${dark}"/><path d="M40 51v4m0 0q-4 3-7 0m7 0q4 3 7 0" fill="none" stroke="${dark}" stroke-width="1.4" stroke-linecap="round"/><path d="M37 58q3 5 6 0" fill="${cheek}" stroke="${dark}" stroke-width="1"/>`;
     case "fox":
-      return `<path d="M16 36 L28 10 L42 30 Z" fill="${accent}"/><path d="M64 36 L52 10 L38 30 Z" fill="${accent}"/>`;
+      return `<path d="M15 37 25 9l17 21M65 37 55 9 38 30" fill="${accent}" stroke="#a84d31" stroke-width="1.2" stroke-linejoin="round"/><path d="m24 15 4 15 9-5m19-10-4 15-9-5" fill="${detail}"/><path d="M17 40q2-18 23-18t23 18q0 22-23 27Q17 62 17 40z" fill="${face}"/><path d="M19 44q10 2 21 19Q51 46 61 44q-2 19-21 23-19-4-21-23z" fill="#fff8ed"/><path d="M27 40q4-4 8 0m18 0q-4-4-8 0" fill="none" stroke="${dark}" stroke-width="2.4" stroke-linecap="round"/><ellipse cx="40" cy="52" rx="4.5" ry="3.2" fill="${dark}"/><path d="M40 55q-3 4-7 1m7-1q3 4 7 1" fill="none" stroke="${dark}" stroke-width="1.3" stroke-linecap="round"/>`;
     case "panda":
-      return `<circle cx="22" cy="26" r="10" fill="${accent}"/><circle cx="58" cy="26" r="10" fill="${accent}"/><ellipse cx="32" cy="44" rx="7" ry="8" fill="${accent}"/><ellipse cx="48" cy="44" rx="7" ry="8" fill="${accent}"/>`;
+      return `<circle cx="20" cy="25" r="11" fill="${accent}"/><circle cx="60" cy="25" r="11" fill="${accent}"/><ellipse cx="40" cy="45" rx="25" ry="23" fill="${face}"/><ellipse cx="30" cy="41" rx="7" ry="9" fill="${accent}" transform="rotate(18 30 41)"/><ellipse cx="50" cy="41" rx="7" ry="9" fill="${accent}" transform="rotate(-18 50 41)"/><ellipse cx="31" cy="41" rx="2.6" ry="3.4" fill="${dark}"/><ellipse cx="49" cy="41" rx="2.6" ry="3.4" fill="${dark}"/>${shine}<ellipse cx="40" cy="53" rx="11" ry="8" fill="#f7efe5"/><ellipse cx="40" cy="50" rx="4.5" ry="3" fill="${dark}"/><path d="M40 53v3m0 0q-4 3-7 0m7 0q4 3 7 0" fill="none" stroke="${dark}" stroke-width="1.3" stroke-linecap="round"/>`;
     case "frog":
-      return `<circle cx="26" cy="20" r="10" fill="${accent}"/><circle cx="54" cy="20" r="10" fill="${accent}"/><circle cx="26" cy="20" r="4.5" fill="#3d4458"/><circle cx="54" cy="20" r="4.5" fill="#3d4458"/><circle cx="27.4" cy="18.8" r="1.4" fill="#fff"/><circle cx="55.4" cy="18.8" r="1.4" fill="#fff"/>`;
-    case "pigtail":
-      return `<circle cx="14" cy="42" r="8" fill="${accent}"/><circle cx="66" cy="42" r="8" fill="${accent}"/><path d="M28 32c2-12 6-16 12-16s10 4 12 16c-4-7-8-9-12-9s-8 2-12 9z" fill="${accent}"/>`;
-    case "sprout":
-      return `<path d="M40 28c-10-2-16-12-14-18 9 1 16 9 14 18z" fill="${accent}"/><path d="M40 28c10-2 16-12 14-18-9 1-16 9-14 18z" fill="#b6f0c8"/><rect x="38.4" y="26" width="3.2" height="8" rx="1.6" fill="#5cbf86"/>`;
-    case "bow":
-      return `<path d="M40 22c-8-12-22-8-20 2 1 6 12 8 20 1 8 7 19 5 20-1 2-10-12-14-20-2z" fill="${accent}"/>`;
-    case "cap":
-      return `<path d="M20 36c2-16 12-20 20-20s18 4 20 20H20z" fill="${accent}"/><path d="M14 36h52v5c0 2-6 4-12 4H26c-6 0-12-2-12-4z" fill="${accent}"/>`;
+      return `<circle cx="27" cy="27" r="12" fill="${face}"/><circle cx="53" cy="27" r="12" fill="${face}"/><ellipse cx="40" cy="48" rx="25" ry="20" fill="${face}"/><circle cx="27" cy="27" r="6" fill="#fff"/><circle cx="53" cy="27" r="6" fill="#fff"/><circle cx="28" cy="28" r="3.2" fill="${dark}"/><circle cx="52" cy="28" r="3.2" fill="${dark}"/><circle cx="29" cy="26.5" r="1.1" fill="#fff"/><circle cx="53" cy="26.5" r="1.1" fill="#fff"/><ellipse cx="26" cy="49" rx="5" ry="2.5" fill="${cheek}"/><ellipse cx="54" cy="49" rx="5" ry="2.5" fill="${cheek}"/><path d="M27 51q13 12 26 0" fill="#fff5e7" stroke="${accent}" stroke-width="1.8" stroke-linecap="round"/><circle cx="35" cy="44" r="1.2" fill="${accent}"/><circle cx="45" cy="44" r="1.2" fill="${accent}"/>`;
+    case "hamster":
+      return `<circle cx="22" cy="27" r="9" fill="${accent}"/><circle cx="58" cy="27" r="9" fill="${accent}"/><circle cx="22" cy="27" r="5" fill="${detail}"/><circle cx="58" cy="27" r="5" fill="${detail}"/><ellipse cx="40" cy="46" rx="25" ry="22" fill="${face}"/><path d="M40 25v38q-13 5-21-8-7-19 9-28z" fill="${accent}" opacity=".35"/><ellipse cx="30" cy="41" rx="3.2" ry="4" fill="${dark}"/><ellipse cx="50" cy="41" rx="3.2" ry="4" fill="${dark}"/>${shine}<ellipse cx="29" cy="52" rx="8" ry="7" fill="#fff7ed"/><ellipse cx="51" cy="52" rx="8" ry="7" fill="#fff7ed"/><ellipse cx="40" cy="49" rx="4" ry="2.8" fill="${detail}"/><path d="M40 52v4m-5-1 5 2 5-2" fill="none" stroke="${dark}" stroke-width="1.2" stroke-linecap="round"/>`;
+    case "deer":
+      return `<path d="M29 25q-8-9-7-17m7 10-8-5m30 12q8-9 7-17m-7 10 8-5" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/><path d="M18 31q-9-9-12-2 6 10 17 10M62 31q9-9 12-2-6 10-17 10" fill="${face}" stroke="${accent}" stroke-width="1.2"/><ellipse cx="40" cy="45" rx="21" ry="24" fill="${face}"/><circle cx="32" cy="31" r="2" fill="${detail}"/><circle cx="47" cy="29" r="2" fill="${detail}"/><circle cx="52" cy="34" r="1.7" fill="${detail}"/><ellipse cx="31" cy="42" rx="3.2" ry="4.2" fill="${dark}"/><ellipse cx="49" cy="42" rx="3.2" ry="4.2" fill="${dark}"/>${shine}<ellipse cx="40" cy="54" rx="11" ry="8" fill="#f8e4c7"/><ellipse cx="40" cy="51" rx="4" ry="2.8" fill="${accent}"/><path d="M40 54q-4 4-7 1m7-1q4 4 7 1" fill="none" stroke="${dark}" stroke-width="1.2" stroke-linecap="round"/>`;
+    case "penguin":
+      return `<ellipse cx="40" cy="46" rx="24" ry="27" fill="${accent}"/><path d="M17 43q-10 7-7 20 9-2 14-11M63 43q10 7 7 20-9-2-14-11" fill="${accent}"/><path d="M24 38q1-15 16-15t16 15q-2 8-8 11H32q-6-3-8-11z" fill="${face}"/><ellipse cx="40" cy="52" rx="15" ry="17" fill="${face}"/><ellipse cx="32" cy="39" rx="3" ry="4" fill="${dark}"/><ellipse cx="48" cy="39" rx="3" ry="4" fill="${dark}"/>${shine}<path d="m34 47 6-5 6 5-6 5z" fill="${detail}"/><path d="m28 68 8-3m16 3-8-3" stroke="${detail}" stroke-width="3" stroke-linecap="round"/>`;
+    case "otter":
+      return `<circle cx="21" cy="27" r="8" fill="${accent}"/><circle cx="59" cy="27" r="8" fill="${accent}"/><circle cx="21" cy="27" r="4" fill="${detail}"/><circle cx="59" cy="27" r="4" fill="${detail}"/><ellipse cx="40" cy="46" rx="24" ry="23" fill="${face}"/><path d="M23 33q17-15 34 0" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><ellipse cx="31" cy="41" rx="3.2" ry="4" fill="${dark}"/><ellipse cx="49" cy="41" rx="3.2" ry="4" fill="${dark}"/>${shine}<ellipse cx="40" cy="53" rx="14" ry="9" fill="${detail}"/><ellipse cx="40" cy="49" rx="5" ry="3.2" fill="${dark}"/><path d="M40 52v4m0 0q-4 3-7 0m7 0q4 3 7 0M28 51l-11-3m11 7-11 2m35-6 11-3m-11 7 11 2" fill="none" stroke="${dark}" stroke-width="1.1" stroke-linecap="round"/>`;
     default:
       return "";
   }
@@ -79,18 +85,9 @@ function earsMarkup(kind, accent, face) {
 
 function avatarSvg(id) {
   const avatar = state.avatars.find((item) => item.id === id);
-  if (!avatar || avatar.kind !== "cute" || !/^[a-z0-9-]{1,32}$/.test(avatar.ears || "")) return "";
-  const face = safeColor(avatar.face);
-  const accent = safeColor(avatar.accent);
-  const cheek = safeColor(avatar.cheek);
+  if (!avatar || avatar.kind !== "animal" || !/^[a-z]{2,16}$/.test(avatar.species || "")) return "";
   const bg = safeColor(avatar.bg);
-  const mouth = avatar.beak
-    ? `<path d="M36 47 h8 l-4 5 z" fill="#ffb703"/>`
-    : `<path d="M34 49c2.2 2.6 9.8 2.6 12 0" fill="none" stroke="#e07a8a" stroke-width="1.7" stroke-linecap="round"/>`;
-  const eyes = avatar.beak
-    ? `<ellipse cx="32" cy="43" rx="2.1" ry="2.5" fill="#3d4458"/><ellipse cx="48" cy="43" rx="2.1" ry="2.5" fill="#3d4458"/>`
-    : `<ellipse cx="32" cy="43" rx="3.3" ry="3.8" fill="#3d4458"/><ellipse cx="48" cy="43" rx="3.3" ry="3.8" fill="#3d4458"/><circle cx="33.2" cy="41.6" r="1.15" fill="#fff"/><circle cx="49.2" cy="41.6" r="1.15" fill="#fff"/>`;
-  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="40" fill="${bg}"/><circle cx="40" cy="46" r="18" fill="${face}"/>${earsMarkup(avatar.ears, accent, face)}<ellipse cx="28" cy="52" rx="4.2" ry="2.3" fill="${cheek}"/><ellipse cx="52" cy="52" rx="4.2" ry="2.3" fill="${cheek}"/>${eyes}${mouth}</svg>`;
+  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="40" fill="${bg}"/><circle cx="40" cy="42" r="32" fill="#fff" opacity=".24"/>${animalMarkup(avatar)}</svg>`;
 }
 
 function avatarButton(id) {
